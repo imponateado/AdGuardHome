@@ -79,6 +79,9 @@ type Config struct {
 	// AnonymizeClientIP tells if the query log should anonymize clients' IP
 	// addresses.
 	AnonymizeClientIP bool
+
+	// StorageType defines where to save logs: "json" (default) or "sqlite".
+	StorageType string
 }
 
 // AddParams is the parameters for adding an entry.
@@ -141,6 +144,10 @@ func New(conf Config) (ql QueryLog, err error) {
 
 // newQueryLog crates a new queryLog.
 func newQueryLog(conf Config) (l *queryLog, err error) {
+	if conf.StorageType == "" {
+		conf.StorageType = "json"
+	}
+
 	findClient := conf.FindClient
 	if findClient == nil {
 		findClient = func(_ []string) (_ *Client, _ error) {
@@ -166,6 +173,14 @@ func newQueryLog(conf Config) (l *queryLog, err error) {
 		logFile: filepath.Join(conf.BaseDir, queryLogFileName),
 
 		anonymizer: conf.Anonymizer,
+	}
+
+	if conf.StorageType == "sqlite" {
+		dbPath := filepath.Join(conf.BaseDir, "querylog.sqlite")
+		l.db, err = initDB(dbPath)
+		if err != nil {
+			return nil, fmt.Errorf("initializing sqlite: %w", err)
+		}
 	}
 
 	*l.conf = conf

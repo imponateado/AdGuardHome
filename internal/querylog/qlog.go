@@ -3,6 +3,7 @@ package querylog
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
@@ -42,6 +43,9 @@ type queryLog struct {
 
 	// logFile is the path to the log file.
 	logFile string
+
+	//
+	db *sql.DB
 
 	// bufferLock protects buffer.
 	bufferLock sync.RWMutex
@@ -109,6 +113,12 @@ func (l *queryLog) Shutdown(ctx context.Context) (err error) {
 		}
 	}
 
+	if l.db != nil {
+		if closeErr := l.db.Close(); closeErr != nil {
+			l.logger.ErrorContext(ctx, "closing sqlite", slogutil.KeyError, closeErr)
+		}
+	}
+
 	return nil
 }
 
@@ -159,6 +169,20 @@ func (l *queryLog) clear(ctx context.Context) {
 		l.buffer.Clear()
 		l.flushPending = false
 	}()
+
+	if l.db != nil {
+		_, err := l.db.ExecContext(ctx, "DELETE FROM query_log")
+		if err != nil {
+			l.logger.ErrorContext(ctx, "clearing sqlite table", slogutil.KeyError, err)
+		}
+
+		_, err = l.db.ExecContext(ctx, "VACUUM")
+		if err != nil {
+			l.logger.ErrorContext(ctx, "vacuuming sqlite", slogutil.KeyError, err)
+		}
+
+		l.logger.DebugContext(ctx, "sqlite cleared")
+	}
 
 	oldLogFile := l.logFile + ".1"
 	err := os.Remove(oldLogFile)

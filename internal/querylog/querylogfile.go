@@ -22,6 +22,14 @@ func (l *queryLog) flushLogBuffer(ctx context.Context) (err error) {
 	l.fileFlushLock.Lock()
 	defer l.fileFlushLock.Unlock()
 
+	l.confMu.RLock()
+	storageType := l.conf.StorageType
+	l.confMu.RUnlock()
+
+	if storageType == "sqlite" && l.db != nil {
+		return l.flushToSQLite(ctx)
+	}
+
 	b, err := l.encodeEntries(ctx)
 	if err != nil {
 		// Don't wrap the error since it's informative enough as is.

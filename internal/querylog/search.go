@@ -107,6 +107,26 @@ func (l *queryLog) search(
 		return []*logEntry{}, time.Time{}
 	}
 
+	l.confMu.RLock()
+	storageType := l.conf.StorageType
+	l.confMu.RUnlock()
+
+	if storageType == "sqlite" && l.db != nil {
+		cache := clientCache{}
+		memoryEntries, bufLen := l.searchMemory(ctx, params, cache)
+
+		sqliteEntries, err := l.searchSQLite(ctx, params)
+		if err != nil {
+			l.logger.ErrorContext(ctx, "searching sqlite", slogutil.KeyError, err)
+			return l.finalizeSearchResults(memoryEntries, params, time.Time{})
+		}
+
+		entries = append(memoryEntries, sqliteEntries...)
+		l.logger.DebugContext(ctx, "sqlite search", "mem_count", bufLen, "db_count", len(sqliteEntries))
+
+		return l.finalizeSearchResults(entries, params, time.Time{})
+	}
+
 	cache := clientCache{}
 
 	memoryEntries, bufLen := l.searchMemory(ctx, params, cache)

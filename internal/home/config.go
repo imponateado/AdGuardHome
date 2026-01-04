@@ -416,6 +416,9 @@ type queryLogConfig struct {
 
 	// FileEnabled defines, if the query log is written to the file.
 	FileEnabled bool `yaml:"file_enabled"`
+
+	// StorageType defines where to save logs: "json" or "sqlite".
+	StorageType string `yaml:"storage_type"`
 }
 
 type statsConfig struct {
@@ -886,6 +889,7 @@ func (c *configuration) write(
 		config.DNS.AnonymizeClientIP = dc.AnonymizeClientIP
 		config.QueryLog.Enabled = dc.Enabled
 		config.QueryLog.FileEnabled = dc.FileEnabled
+		config.QueryLog.StorageType = dc.StorageType
 		config.QueryLog.Interval = timeutil.Duration(dc.RotationIvl)
 		config.QueryLog.MemSize = dc.MemSize
 		config.QueryLog.Ignored = dc.Ignored.Values()

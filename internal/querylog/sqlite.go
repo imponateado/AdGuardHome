@@ -8,6 +8,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/AdguardTeam/golibs/logutil/slogutil"
+	"github.com/miekg/dns"
 	_ "modernc.org/sqlite"
 )
 
@@ -28,7 +30,7 @@ func initDB(path string) (*sql.DB, error) {
 		upstream TEXT,
 		elapsed_ns INTEGER,
 		response_code TEXT,
-		filtering_result TEXT,
+		filtering_result TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_timestamp ON query_log (timestamp);
 	`
@@ -39,11 +41,7 @@ func initDB(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("creating table: %w", err)
 	}
 
-	_, errAlter := db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
-	if errAlter != nil {
-		db.Close()
-		return nil, fmt.Errorf("modifying table: %w", err)
-	}
+	db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
 
 	return db, nil
 }
@@ -67,7 +65,7 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 		`
 			INSERT INTO query_log(
 				timestamp, q_host, q_type, client_id, client_ip, upstream, elapsed_ns, response_code, filtering_result
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 	if err != nil {
 		return fmt.Errorf("preparing statement: %w", err)
@@ -81,7 +79,19 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 			clientIP = entry.IP.String()
 		}
 
-		resJSON, _ := json.Marshal(entry.Result)
+		responseCode := ""
+		if len(entry.Answer) > 0 {
+			msg := &dns.Msg{}
+			if err := msg.Unpack(entry.Answer); err == nil {
+				responseCode = dns.RcodeToString[msg.Rcode]
+			}
+		}
+
+		resBytes, err := json.Marshal(entry.Result)
+		if err != nil {
+			l.logger.ErrorContext(ctx, "marshaling filtering result", slogutil.KeyError, err)
+			resBytes = []byte("{}")
+		}
 
 		_, execErr = stmt.ExecContext(ctx,
 			entry.Time.UnixNano(),
@@ -91,8 +101,8 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 			clientIP,
 			entry.Upstream,
 			entry.Elapsed.Nanoseconds(),
-			"",
-			string(resJSON),
+			responseCode,
+			string(resBytes),
 		)
 		return execErr == nil
 	})

@@ -199,6 +199,8 @@ func newQueryLog(conf Config) (l *queryLog, err error) {
 		return nil, fmt.Errorf("unsupported interval: %w", err)
 	}
 
+	l.CheckAndMigrate(context.Background())
+
 	return l, nil
 }
 

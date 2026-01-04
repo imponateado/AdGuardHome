@@ -3,6 +3,7 @@ package querylog
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net"
 	"time"
@@ -26,7 +27,8 @@ func initDB(path string) (*sql.DB, error) {
 		client_ip TEXT,
 		upstream TEXT,
 		elapsed_ns INTEGER,
-		response_code TEXT
+		response_code TEXT,
+		filtering_result TEXT,
 	);
 	CREATE INDEX IF NOT EXISTS idx_timestamp ON query_log (timestamp);
 	`
@@ -35,6 +37,12 @@ func initDB(path string) (*sql.DB, error) {
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("creating table: %w", err)
+	}
+
+	_, errAlter := db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
+	if errAlter != nil {
+		db.Close()
+		return nil, fmt.Errorf("modifying table: %w", err)
 	}
 
 	return db, nil
@@ -58,7 +66,7 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 	stmt, err := tx.PrepareContext(ctx,
 		`
 			INSERT INTO query_log(
-				timestamp, q_host, q_type, client_id, client_ip, upstream, elapsed_ns, response_code
+				timestamp, q_host, q_type, client_id, client_ip, upstream, elapsed_ns, response_code, filtering_result
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		`)
 	if err != nil {
@@ -73,6 +81,8 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 			clientIP = entry.IP.String()
 		}
 
+		resJSON, _ := json.Marshal(entry.Result)
+
 		_, execErr = stmt.ExecContext(ctx,
 			entry.Time.UnixNano(),
 			entry.QHost,
@@ -82,6 +92,7 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 			entry.Upstream,
 			entry.Elapsed.Nanoseconds(),
 			"",
+			string(resJSON),
 		)
 		return execErr == nil
 	})
@@ -101,7 +112,7 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 }
 
 func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*logEntry, error) {
-	query := "SELECT timestamp, q_host, q_type, client_id, client_ip, upstream, elapsed_ns, response_code FROM query_log WHERE 1=1"
+	query := "SELECT timestamp, q_host, q_type, client_id, client_ip, upstream, elapsed_ns, response_code, filtering_result FROM query_log WHERE 1=1"
 	var args []interface{}
 
 	if !params.olderThan.IsZero() {
@@ -140,8 +151,9 @@ func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*l
 		var ts int64
 		var qHost, qType, clientID, clientIPStr, upstream, respCode string
 		var elapsedNs int64
+		var filteringResultJSON sql.NullString
 
-		err := rows.Scan(&ts, &qHost, &qType, &clientID, &clientIPStr, &upstream, &elapsedNs, &respCode)
+		err := rows.Scan(&ts, &qHost, &qType, &clientID, &clientIPStr, &upstream, &elapsedNs, &respCode, &filteringResultJSON)
 		if err != nil {
 			fmt.Errorf("error: %w", err)
 			continue
@@ -156,6 +168,11 @@ func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*l
 			Upstream: upstream,
 			Elapsed:  time.Duration(elapsedNs),
 		}
+
+		if filteringResultJSON.Valid && filteringResultJSON.String != "" {
+			_ = json.Unmarshal([]byte(filteringResultJSON.String), &entry.Result)
+		}
+
 		entries = append(entries, entry)
 	}
 

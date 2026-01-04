@@ -31,6 +31,7 @@ export type FormValues = {
     customInterval?: number | null;
     ignored: string;
     ignored_enabled: boolean;
+    storage_type?: string;
 };
 
 type Props = {
@@ -59,11 +60,13 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
             customInterval: initialValues.customInterval || null,
             ignored: initialValues.ignored || '',
             ignored_enabled: initialValues.ignored_enabled ?? true,
+            storage_type: initialValues.storage_type || 'json',
         },
     });
 
     const intervalValue = watch('interval');
     const customIntervalValue = watch('customInterval');
+    const storageTypeValue = watch('storage_type');
 
     useEffect(() => {
         if (QUERY_LOG_INTERVALS_DAYS.includes(intervalValue)) {
@@ -113,6 +116,41 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
                         />
                     )}
                 />
+            </div>
+
+            <div className="form__label">
+                Storage Engine
+            </div>
+
+            <div className="form__group form__group--settings">
+                <div className="custom-controls-stacked">
+                    <label className="custom-control custom-radio">
+                        <input
+                            type="radio"
+                            className="custom-control-input"
+                            disabled={processing}
+                            value="json"
+                            checked={storageTypeValue === 'json'}
+                            onChange={() => setValue('storage_type', 'json')}
+                        />
+                        <span className="custom-control-label">JSON File (Standard)</span>
+                    </label>
+
+                    <label className="custom-control custom-radio">
+                        <input
+                            type="radio"
+                            className="custom-control-input"
+                            disabled={processing}
+                            value="sqlite"
+                            checked={storageTypeValue === 'sqlite'}
+                            onChange={() => setValue('storage_type', 'sqlite')}
+                        />
+                        <span className="custom-control-label">SQLite Database (Optimized for performance)</span>
+                    </label>
+                </div>
+                <div className="form__desc">
+                    Note: Changing this setting may require a restart to take effect.
+                </div>
             </div>
 
             <div className="form__label">

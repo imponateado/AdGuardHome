@@ -1,6 +1,7 @@
 package querylog
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
@@ -31,6 +32,9 @@ type QueryLog interface {
 
 	// ShouldLog returns true if request for the host should be logged.
 	ShouldLog(host string, qType, qClass uint16, ids []string) bool
+
+	//GetSQLDB returns the nderlying SQLite database connection, or nil if SQLite is not used.
+	GetSQLDB() *sql.DB
 }
 
 // Config is the query log configuration structure.
@@ -191,4 +195,8 @@ func newQueryLog(conf Config) (l *queryLog, err error) {
 	}
 
 	return l, nil
+}
+
+func (l *queryLog) GetSQLDB() *sql.DB {
+	return l.db
 }

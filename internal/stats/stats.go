@@ -4,6 +4,7 @@ package stats
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
@@ -79,6 +80,9 @@ type Config struct {
 
 	// Enabled tells if the statistics are enabled.
 	Enabled bool
+
+	// QueryLogDB is the SQLite database connection from querylog module. If set, statistics will be calculated using SQL queries.
+	QueryLogDB *sql.DB
 }
 
 // Interface is the statistics interface to be used by other packages.
@@ -149,7 +153,7 @@ type StatsCtx struct {
 
 // New creates s from conf and properly initializes it.  Don't use s before
 // calling it's Start method.
-func New(conf Config) (s *StatsCtx, err error) {
+func New(conf Config) (s Interface, err error) {
 	defer withRecovered(&err)
 
 	err = validateIvl(conf.Limit)
@@ -161,7 +165,11 @@ func New(conf Config) (s *StatsCtx, err error) {
 		return nil, errors.Error("should count client is unspecified")
 	}
 
-	s = &StatsCtx{
+	if conf.QueryLogDB != nil {
+		return newSqliteStats(conf)
+	}
+
+	ctx := &StatsCtx{
 		logger:         conf.Logger,
 		currMu:         &sync.RWMutex{},
 		httpReg:        conf.HTTPReg,
@@ -175,39 +183,37 @@ func New(conf Config) (s *StatsCtx, err error) {
 		enabled:           conf.Enabled,
 	}
 
-	if s.unitIDGen = newUnitID; conf.UnitID != nil {
-		s.unitIDGen = conf.UnitID
+	if ctx.unitIDGen = newUnitID; conf.UnitID != nil {
+		ctx.unitIDGen = conf.UnitID
 	}
 
-	// TODO(e.burkov):  Move the code below to the Start method.
-
-	err = s.openDB()
+	err = ctx.openDB()
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
 	var udb *unitDB
-	id := s.unitIDGen()
+	id := ctx.unitIDGen()
 
-	tx, err := s.db.Load().Begin(true)
+	tx, err := ctx.db.Load().Begin(true)
 	if err != nil {
 		return nil, fmt.Errorf("opening a transaction: %w", err)
 	}
 
-	deleted := s.deleteOldUnits(tx, id-uint32(s.limit.Hours())-1)
-	udb = s.loadUnitFromDB(tx, id)
+	deleted := ctx.deleteOldUnits(tx, id-uint32(ctx.limit.Hours())-1)
+	udb = ctx.loadUnitFromDB(tx, id)
 
 	err = finishTxn(tx, deleted > 0)
 	if err != nil {
-		s.logger.Error("finishing transacation", slogutil.KeyError, err)
+		ctx.logger.Error("finishing transacation", slogutil.KeyError, err)
 	}
 
-	s.curr = newUnit(id)
-	s.curr.deserialize(udb)
+	ctx.curr = newUnit(id)
+	ctx.curr.deserialize(udb)
 
-	s.logger.Debug("initialized")
+	ctx.logger.Debug("initialized")
 
-	return s, nil
+	return ctx, nil
 }
 
 // withRecovered turns the value recovered from panic if any into an error and

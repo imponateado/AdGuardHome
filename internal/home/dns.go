@@ -54,25 +54,9 @@ func initDNS(
 ) (err error) {
 	anonymizer := config.anonymizer()
 
-	statsConf := stats.Config{
-		Logger:            baseLogger.With(slogutil.KeyPrefix, "stats"),
-		Filename:          filepath.Join(statsDir, "stats.db"),
-		Limit:             time.Duration(config.Stats.Interval),
-		ConfigModifier:    confModifier,
-		HTTPReg:           httpReg,
-		Enabled:           config.Stats.Enabled,
-		ShouldCountClient: globalContext.clients.shouldCountClient,
-	}
-
-	engine, err := aghnet.NewIgnoreEngine(config.Stats.Ignored, config.Stats.IgnoredEnabled)
+	engine, err := aghnet.NewIgnoreEngine(config.QueryLog.Ignored, config.QueryLog.IgnoredEnabled)
 	if err != nil {
-		return fmt.Errorf("statistics: ignored list: %w", err)
-	}
-
-	statsConf.Ignored = engine
-	globalContext.stats, err = stats.New(statsConf)
-	if err != nil {
-		return fmt.Errorf("init stats: %w", err)
+		return fmt.Errorf("querylog: ignored list: %w", err)
 	}
 
 	conf := querylog.Config{
@@ -90,15 +74,32 @@ func initDNS(
 		StorageType:       config.QueryLog.StorageType,
 	}
 
-	engine, err = aghnet.NewIgnoreEngine(config.QueryLog.Ignored, config.QueryLog.IgnoredEnabled)
-	if err != nil {
-		return fmt.Errorf("querylog: ignored list: %w", err)
-	}
-
 	conf.Ignored = engine
 	globalContext.queryLog, err = querylog.New(conf)
 	if err != nil {
 		return fmt.Errorf("init querylog: %w", err)
+	}
+
+	statsConf := stats.Config{
+		Logger:            baseLogger.With(slogutil.KeyPrefix, "stats"),
+		Filename:          filepath.Join(statsDir, "stats.db"),
+		Limit:             time.Duration(config.Stats.Interval),
+		ConfigModifier:    confModifier,
+		HTTPReg:           httpReg,
+		Enabled:           config.Stats.Enabled,
+		ShouldCountClient: globalContext.clients.shouldCountClient,
+		QueryLogDB:        globalContext.queryLog.GetSQLDB(),
+	}
+
+	engine, err = aghnet.NewIgnoreEngine(config.Stats.Ignored, config.Stats.IgnoredEnabled)
+	if err != nil {
+		return fmt.Errorf("statistics: ignored list: %w", err)
+	}
+
+	statsConf.Ignored = engine
+	globalContext.stats, err = stats.New(statsConf)
+	if err != nil {
+		return fmt.Errorf("init stats: %w", err)
 	}
 
 	globalContext.filters, err = filtering.New(config.Filtering, nil)

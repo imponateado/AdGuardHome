@@ -88,7 +88,7 @@ func initDNS(
 		HTTPReg:           httpReg,
 		Enabled:           config.Stats.Enabled,
 		ShouldCountClient: globalContext.clients.shouldCountClient,
-		QueryLogDB:        globalContext.queryLog.GetSQLDB(),
+		QueryLog:          globalContext.queryLog,
 	}
 
 	engine, err = aghnet.NewIgnoreEngine(config.Stats.Ignored, config.Stats.IgnoredEnabled)

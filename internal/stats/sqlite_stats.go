@@ -1,6 +1,7 @@
 package stats
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log/slog"
@@ -19,7 +20,9 @@ import (
 // sqliteStats implements the Interface using direct SQL queries on QueryLog DB.
 type sqliteStats struct {
 	logger *slog.Logger
-	db     *sql.DB
+	
+	// Changed from *sql.DB to QueryLogReader to allow Flush
+	queryLog QueryLogReader
 
 	confMu            *sync.RWMutex
 	ignored           *aghnet.IgnoreEngine
@@ -35,7 +38,7 @@ type sqliteStats struct {
 func newSqliteStats(conf Config) (Interface, error) {
 	s := &sqliteStats{
 		logger:            conf.Logger,
-		db:                conf.QueryLogDB,
+		queryLog:          conf.QueryLog, // Store the interface
 		limit:             conf.Limit,
 		confMu:            &sync.RWMutex{},
 		ignored:           conf.Ignored,
@@ -96,7 +99,9 @@ func (s *sqliteStats) TopClientsIP(limit uint) []netip.Addr {
 		ORDER BY cnt DESC 
 		LIMIT ?`
 
-	rows, err := s.db.Query(query, olderThan, limit)
+	// Get DB from interface
+	db := s.queryLog.GetSQLDB()
+	rows, err := db.Query(query, olderThan, limit)
 	if err != nil {
 		s.logger.Error("querying top clients", slogutil.KeyError, err)
 		return nil
@@ -117,7 +122,6 @@ func (s *sqliteStats) TopClientsIP(limit uint) []netip.Addr {
 }
 
 // HTTP Handlers Replication
-// We duplicate the handlers here because the original handlers are bound to *StatsCtx concrete struct.
 
 func (s *sqliteStats) initWeb() {
 	s.httpReg.Register(http.MethodGet, "/control/stats", s.handleStats)
@@ -136,7 +140,7 @@ func (s *sqliteStats) handleStats(w http.ResponseWriter, r *http.Request) {
 	func() {
 		s.confMu.RLock()
 		defer s.confMu.RUnlock()
-		resp, err = s.getStatsData(s.limit)
+		resp, err = s.getStatsData(ctx, s.limit) // Pass context for Flush
 	}()
 
 	s.logger.DebugContext(ctx, "prepared sqlite data", "elapsed", time.Since(start))
@@ -150,10 +154,8 @@ func (s *sqliteStats) handleStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *sqliteStats) handleStatsReset(w http.ResponseWriter, r *http.Request) {
-	// For SQLite, "reset stats" means deleting logs. 
-	// This is dangerous if QueryLog is shared. 
-	// For now, we implement deletion to match behavior.
-	_, err := s.db.Exec("DELETE FROM query_log")
+	db := s.queryLog.GetSQLDB()
+	_, err := db.Exec("DELETE FROM query_log")
 	if err != nil {
 		aghhttp.ErrorAndLog(r.Context(), s.logger, r, w, http.StatusInternalServerError, "clearing stats: %s", err)
 	}
@@ -210,8 +212,7 @@ func (s *sqliteStats) handlePutStatsConfig(w http.ResponseWriter, r *http.Reques
 
 // Data Retrieval Logic
 
-func (s *sqliteStats) getStatsData(limit time.Duration) (*StatsResp, error) {
-	// Ensure we return initialized slices, not nil, to avoid React frontend crash.
+func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*StatsResp, error) {
 	resp := &StatsResp{
 		TimeUnits: "hours",
 		
@@ -231,7 +232,14 @@ func (s *sqliteStats) getStatsData(limit time.Duration) (*StatsResp, error) {
 		return resp, nil
 	}
 
+	// FORCE FLUSH BEFORE QUERYING
+	if err := s.queryLog.Flush(ctx); err != nil {
+		s.logger.ErrorContext(ctx, "flushing query log for stats", slogutil.KeyError, err)
+		// Continue anyway, maybe partially stale data is better than nothing
+	}
+
 	olderThan := time.Now().Add(-limit).UnixNano()
+	db := s.queryLog.GetSQLDB()
 
 	queryTimeSeriesFixed := `
 		SELECT 
@@ -243,7 +251,7 @@ func (s *sqliteStats) getStatsData(limit time.Duration) (*StatsResp, error) {
 		WHERE timestamp > ?
 	`
 
-	row := s.db.QueryRow(queryTimeSeriesFixed, olderThan)
+	row := db.QueryRow(queryTimeSeriesFixed, olderThan)
 	var total, blocked, sb, parental sql.NullInt64
 	if err := row.Scan(&total, &blocked, &sb, &parental); err == nil {
 		resp.NumDNSQueries = uint64(total.Int64)
@@ -252,23 +260,17 @@ func (s *sqliteStats) getStatsData(limit time.Duration) (*StatsResp, error) {
 		resp.NumReplacedParental = uint64(parental.Int64)
 	}
 
-	// 2. Top Queried Domains
-	resp.TopQueried = s.getTopMap(`SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
-
-	// 3. Top Blocked Domains
-	resp.TopBlocked = s.getTopMap(`SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? AND json_extract(filtering_result, '$.IsFiltered') = true GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
-
-	// 4. Top Clients
-	resp.TopClients = s.getTopMap(`SELECT client_ip, COUNT(*) FROM query_log WHERE timestamp > ? AND client_ip != '' GROUP BY client_ip ORDER BY 2 DESC LIMIT ?`, olderThan)
+	resp.TopQueried = s.getTopMap(db, `SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
+	resp.TopBlocked = s.getTopMap(db, `SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? AND json_extract(filtering_result, '$.IsFiltered') = true GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
+	resp.TopClients = s.getTopMap(db, `SELECT client_ip, COUNT(*) FROM query_log WHERE timestamp > ? AND client_ip != '' GROUP BY client_ip ORDER BY 2 DESC LIMIT ?`, olderThan)
 
 	return resp, nil
 }
 
-func (s *sqliteStats) getTopMap(query string, olderThan int64) []map[string]uint64 {
-	// Initialize as empty slice to return [] instead of null in JSON
+func (s *sqliteStats) getTopMap(db *sql.DB, query string, olderThan int64) []map[string]uint64 {
 	res := []map[string]uint64{}
 	
-	rows, err := s.db.Query(query, olderThan, 100) // Limit 100 hardcoded as per standard
+	rows, err := db.Query(query, olderThan, 100)
 	if err != nil {
 		s.logger.Error("querying top", slogutil.KeyError, err)
 		return res

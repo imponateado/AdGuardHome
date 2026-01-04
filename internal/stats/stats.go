@@ -45,6 +45,12 @@ func validateIvl(ivl time.Duration) (err error) {
 	return nil
 }
 
+// QueryLogReader defines the methods required from the query log module.
+type QueryLogReader interface {
+	GetSQLDB() *sql.DB
+	Flush(ctx context.Context) error
+}
+
 // Config is the configuration structure for the statistics collecting.
 //
 // Do not alter any fields of this structure after using it.
@@ -81,8 +87,8 @@ type Config struct {
 	// Enabled tells if the statistics are enabled.
 	Enabled bool
 
-	// QueryLogDB is the SQLite database connection from querylog module. If set, statistics will be calculated using SQL queries.
-	QueryLogDB *sql.DB
+	// QueryLog is the interface to the query log module. If the query log uses SQLite, statistics will be calculated using SQL queries.
+	QueryLog QueryLogReader
 }
 
 // Interface is the statistics interface to be used by other packages.
@@ -165,7 +171,7 @@ func New(conf Config) (s Interface, err error) {
 		return nil, errors.Error("should count client is unspecified")
 	}
 
-	if conf.QueryLogDB != nil {
+	if conf.QueryLog != nil && conf.QueryLog.GetSQLDB() != nil {
 		return newSqliteStats(conf)
 	}
 

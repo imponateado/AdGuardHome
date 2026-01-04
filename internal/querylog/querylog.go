@@ -1,6 +1,7 @@
 package querylog
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -33,8 +34,12 @@ type QueryLog interface {
 	// ShouldLog returns true if request for the host should be logged.
 	ShouldLog(host string, qType, qClass uint16, ids []string) bool
 
-	//GetSQLDB returns the nderlying SQLite database connection, or nil if SQLite is not used.
+	// GetSQLDB returns the underlying SQLite database connection, or nil if
+	// SQLite is not used.
 	GetSQLDB() *sql.DB
+
+	// Flush forces the buffer to be written to the storage.
+	Flush(ctx context.Context) error
 }
 
 // Config is the query log configuration structure.
@@ -199,4 +204,8 @@ func newQueryLog(conf Config) (l *queryLog, err error) {
 
 func (l *queryLog) GetSQLDB() *sql.DB {
 	return l.db
+}
+
+func (l *queryLog) Flush(ctx context.Context) error {
+	return l.flushLogBuffer(ctx)
 }

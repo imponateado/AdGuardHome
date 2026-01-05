@@ -135,6 +135,33 @@ func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*l
 			query += " AND (q_host LIKE ? OR client_ip LIKE ? OR client_id LIKE ?)"
 			pattern := "%" + c.value + "%"
 			args = append(args, pattern, pattern, pattern)
+		} else if c.criterionType == ctFilteringStatus {
+			// Mapping based on internal/querylog/searchcriterion.go
+			switch c.value {
+			case filteringStatusAll:
+				// No-op
+			case filteringStatusFiltered:
+				// IsFiltered OR Reason in (AllowList, Rewritten, RewrittenAutoHosts, RewrittenRule)
+				query += " AND (json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) OR json_extract(filtering_result, '$.Reason') IN (1, 9, 10, 11))"
+			case filteringStatusBlocked:
+				// IsFiltered AND Reason in (BlockList, BlockedService)
+				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') IN (3, 8)"
+			case filteringStatusBlockedService:
+				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 8"
+			case filteringStatusBlockedSafebrowsing:
+				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 4"
+			case filteringStatusBlockedParental:
+				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 5"
+			case filteringStatusWhitelisted:
+				query += " AND json_extract(filtering_result, '$.Reason') = 1"
+			case filteringStatusRewritten:
+				query += " AND json_extract(filtering_result, '$.Reason') IN (9, 10, 11)"
+			case filteringStatusSafeSearch:
+				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 7"
+			case filteringStatusProcessed:
+				// NOT IN (BlockList, BlockedService, AllowList)
+				query += " AND json_extract(filtering_result, '$.Reason') NOT IN (3, 8, 1)"
+			}
 		}
 	}
 

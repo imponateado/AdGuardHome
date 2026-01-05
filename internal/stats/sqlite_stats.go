@@ -20,8 +20,7 @@ import (
 // sqliteStats implements the Interface using direct SQL queries on QueryLog DB.
 type sqliteStats struct {
 	logger *slog.Logger
-	
-	// Changed from *sql.DB to QueryLogReader to allow Flush
+
 	queryLog QueryLogReader
 
 	confMu            *sync.RWMutex
@@ -215,7 +214,7 @@ func (s *sqliteStats) handlePutStatsConfig(w http.ResponseWriter, r *http.Reques
 func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*StatsResp, error) {
 	resp := &StatsResp{
 		TimeUnits: "hours",
-		
+
 		TopQueried:            []topAddrs{},
 		TopBlocked:            []topAddrs{},
 		TopClients:            []topAddrs{},
@@ -235,16 +234,23 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*S
 	// FORCE FLUSH BEFORE QUERYING
 	if err := s.queryLog.Flush(ctx); err != nil {
 		s.logger.ErrorContext(ctx, "flushing query log for stats", slogutil.KeyError, err)
-		// Continue anyway, maybe partially stale data is better than nothing
 	}
 
 	olderThan := time.Now().Add(-limit).UnixNano()
+
+	s.logger.InfoContext(ctx, "DEBUG STATS",
+		"limit_seconds", limit.Seconds(),
+		"olderThan_nano", olderThan,
+		"now_nano", time.Now().UnixNano(),
+	)
+
 	db := s.queryLog.GetSQLDB()
 
+	// 1. Totals
 	queryTimeSeriesFixed := `
 		SELECT 
 			COUNT(*) as total,
-			SUM(CASE WHEN json_extract(filtering_result, '$.IsFiltered') = true THEN 1 ELSE 0 END) as blocked,
+			SUM(CASE WHEN json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) THEN 1 ELSE 0 END) as blocked,
 			SUM(CASE WHEN json_extract(filtering_result, '$.Reason') = 4 THEN 1 ELSE 0 END) as safe_browsing, 
 			SUM(CASE WHEN json_extract(filtering_result, '$.Reason') = 5 THEN 1 ELSE 0 END) as parental
 		FROM query_log
@@ -260,28 +266,88 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*S
 		resp.NumReplacedParental = uint64(parental.Int64)
 	}
 
+	// 2. Top Queried Domains
 	resp.TopQueried = s.getTopMap(db, `SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
-	resp.TopBlocked = s.getTopMap(db, `SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? AND json_extract(filtering_result, '$.IsFiltered') = true GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
-	resp.TopClients = s.getTopMap(db, `SELECT client_ip, COUNT(*) FROM query_log WHERE timestamp > ? AND client_ip != '' GROUP BY client_ip ORDER BY 2 DESC LIMIT ?`, olderThan)
+
+	// 3. Top Blocked Domains (Corrected IsFiltered check)
+	resp.TopBlocked = s.getTopMap(db, `
+		SELECT q_host, COUNT(*) 
+		FROM query_log 
+		WHERE timestamp > ? AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true)
+		GROUP BY q_host 
+		ORDER BY 2 DESC 
+		LIMIT ?`, olderThan)
+
+	// 4. Top Clients (ID/IP)
+	resp.TopClients = s.getTopMap(db, `
+		SELECT 
+			CASE WHEN client_id IS NOT NULL AND client_id != '' THEN client_id ELSE client_ip END as identifier, 
+			COUNT(*) 
+		FROM query_log 
+		WHERE timestamp > ? AND (client_ip != '' OR client_id != '')
+		GROUP BY identifier 
+		ORDER BY 2 DESC 
+		LIMIT ?`, olderThan)
+
+	// 5. Top Upstreams Responses
+	resp.TopUpstreamsResponses = s.getTopMap(db, `
+		SELECT upstream, COUNT(*)
+		FROM query_log
+		WHERE timestamp > ? AND upstream != ''
+		GROUP BY upstream
+		ORDER BY 2 DESC
+		LIMIT ?`, olderThan)
+
+	// 6. Top Upstreams Avg Time
+	resp.TopUpstreamsAvgTime = s.getTopMapFloat(db, `
+		SELECT upstream, AVG(elapsed_ns) / 1000000000.0
+		FROM query_log
+		WHERE timestamp > ? AND upstream != ''
+		GROUP BY upstream
+		ORDER BY 2 ASC
+		LIMIT ?`, olderThan)
 
 	return resp, nil
 }
 
 func (s *sqliteStats) getTopMap(db *sql.DB, query string, olderThan int64) []map[string]uint64 {
 	res := []map[string]uint64{}
-	
-	rows, err := db.Query(query, olderThan, 100)
+
+	rows, err := db.Query(query, olderThan, 100) // Limit 100
 	if err != nil {
 		s.logger.Error("querying top", slogutil.KeyError, err)
 		return res
 	}
 	defer rows.Close()
 
+	count := 0
 	for rows.Next() {
+		count++
 		var name string
 		var count uint64
 		if err := rows.Scan(&name, &count); err == nil {
 			res = append(res, map[string]uint64{name: count})
+		}
+	}
+	s.logger.Info("DEBUG TOP MAP", "query", query, "rows_found", count)
+	return res
+}
+
+func (s *sqliteStats) getTopMapFloat(db *sql.DB, query string, olderThan int64) []map[string]float64 {
+	res := []map[string]float64{}
+
+	rows, err := db.Query(query, olderThan, 100) // Limit 100
+	if err != nil {
+		s.logger.Error("querying top float", slogutil.KeyError, err)
+		return res
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var name string
+		var val float64
+		if err := rows.Scan(&name, &val); err == nil {
+			res = append(res, map[string]float64{name: val})
 		}
 	}
 	return res

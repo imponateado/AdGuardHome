@@ -374,6 +374,7 @@ export type QueryLogsData = {
     isEntireLog: boolean;
     customInterval: any;
     ignored_enabled: boolean;
+    storage_type?: string;
 };
 
 export type ServicesData = {
@@ -579,6 +580,7 @@ export const initialState: RootState = {
         isEntireLog: false,
         customInterval: null,
         ignored_enabled: true,
+        storage_type: 'json',
     },
     rewrites: {
         processing: true,

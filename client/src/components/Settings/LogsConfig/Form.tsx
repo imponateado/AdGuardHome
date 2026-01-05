@@ -49,6 +49,7 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
         handleSubmit,
         watch,
         setValue,
+        reset,
         control,
         formState: { isSubmitting },
     } = useForm<FormValues>({
@@ -63,6 +64,19 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
             storage_type: initialValues.storage_type || 'json',
         },
     });
+
+    // Update form values when initialValues change (e.g. after API load)
+    useEffect(() => {
+        reset({
+            enabled: initialValues.enabled || false,
+            anonymize_client_ip: initialValues.anonymize_client_ip || false,
+            interval: initialValues.interval || DAY,
+            customInterval: initialValues.customInterval || null,
+            ignored: initialValues.ignored || '',
+            ignored_enabled: initialValues.ignored_enabled ?? true,
+            storage_type: initialValues.storage_type || 'json',
+        });
+    }, [initialValues, reset]);
 
     const intervalValue = watch('interval');
     const customIntervalValue = watch('customInterval');

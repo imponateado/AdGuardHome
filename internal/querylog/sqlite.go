@@ -210,8 +210,42 @@ func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*l
 			_ = json.Unmarshal([]byte(filteringResultJSON.String), &entry.Result)
 		}
 
-		entries = append(entries, entry)
-	}
+				entries = append(entries, entry)
 
-	return entries, nil
-}
+			}
+
+		
+
+			return entries, nil
+
+		}
+
+		
+
+		func (l *queryLog) deleteOld(ctx context.Context, olderThan time.Time) error {
+
+			l.logger.DebugContext(ctx, "deleting old sqlite entries", "older_than", olderThan)
+
+		
+
+			res, err := l.db.ExecContext(ctx, "DELETE FROM query_log WHERE timestamp < ?", olderThan.UnixNano())
+
+			if err != nil {
+
+				return fmt.Errorf("deleting old entries: %w", err)
+
+			}
+
+		
+
+			rowsAffected, _ := res.RowsAffected()
+
+			l.logger.DebugContext(ctx, "deleted old sqlite entries", "count", rowsAffected)
+
+		
+
+			return nil
+
+		}
+
+		

@@ -179,12 +179,28 @@ func (l *queryLog) periodicRotate(ctx context.Context) {
 // rotation interval.
 func (l *queryLog) checkAndRotate(ctx context.Context) {
 	var rotationIvl time.Duration
+	var storageType string
 	func() {
 		l.confMu.RLock()
 		defer l.confMu.RUnlock()
 
 		rotationIvl = l.conf.RotationIvl
+		storageType = l.conf.StorageType
 	}()
+
+	if storageType == "sqlite" {
+		if l.db == nil {
+			return
+		}
+
+		olderThan := time.Now().Add(-rotationIvl)
+		err := l.deleteOld(ctx, olderThan)
+		if err != nil {
+			l.logger.ErrorContext(ctx, "cleaning up sqlite", slogutil.KeyError, err)
+		}
+
+		return
+	}
 
 	oldest, err := l.readFileFirstTimeValue(ctx)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

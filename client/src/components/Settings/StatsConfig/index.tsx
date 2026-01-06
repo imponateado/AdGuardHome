@@ -22,7 +22,7 @@ interface StatsConfigProps {
 
 class StatsConfig extends Component<StatsConfigProps> {
     handleFormSubmit = ({ enabled, interval, ignored, ignored_enabled, customInterval }: FormValues) => {
-        const { t, interval: prevInterval } = this.props;
+        const { t, interval: prevInterval, storageType } = this.props;
         const newInterval = customInterval ? customInterval * HOUR : interval;
 
         const config = {
@@ -31,6 +31,11 @@ class StatsConfig extends Component<StatsConfigProps> {
             ignored: ignored ? ignored.split('\n') : [],
             ignored_enabled,
         };
+
+        if (storageType === 'sqlite') {
+            this.props.setStatsConfig(config);
+            return;
+        }
 
         if (config.interval < prevInterval) {
             if (window.confirm(t('statistics_retention_confirm'))) {

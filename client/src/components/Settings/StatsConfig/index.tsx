@@ -17,6 +17,7 @@ interface StatsConfigProps {
     setStatsConfig: (...args: unknown[]) => unknown;
     resetStats: (...args: unknown[]) => unknown;
     t: (...args: unknown[]) => string;
+    storageType?: string;
 }
 
 class StatsConfig extends Component<StatsConfigProps> {
@@ -58,6 +59,7 @@ class StatsConfig extends Component<StatsConfigProps> {
             ignored,
             ignoredEnabled,
             enabled,
+            storageType,
         } = this.props;
 
         return (
@@ -75,6 +77,7 @@ class StatsConfig extends Component<StatsConfigProps> {
                         processingReset={processingReset}
                         onSubmit={this.handleFormSubmit}
                         onReset={this.handleReset}
+                        storageType={storageType}
                     />
                 </div>
             </Card>

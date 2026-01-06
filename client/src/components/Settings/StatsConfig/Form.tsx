@@ -44,9 +44,10 @@ type Props = {
     processingReset: boolean;
     onSubmit: (values: FormValues) => void;
     onReset: () => void;
+    storageType?: string;
 };
 
-export const Form = ({ initialValues, processing, processingReset, onSubmit, onReset }: Props) => {
+export const Form = ({ initialValues, processing, processingReset, onSubmit, onReset, storageType }: Props) => {
     const { t } = useTranslation();
 
     const {
@@ -100,7 +101,14 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
             </div>
 
             <div className="form__desc form__desc--top">
-                <Trans>statistics_retention_desc</Trans>
+                {storageType === 'sqlite' ? (
+                    <span className="text-warning">
+                        With SQLite enabled, this setting defines the analysis period for calculating statistics. 
+                        Shorter periods significantly improve dashboard performance.
+                    </span>
+                ) : (
+                    <Trans>statistics_retention_desc</Trans>
+                )}
             </div>
 
             <div className="form__group form__group--settings mt-2">

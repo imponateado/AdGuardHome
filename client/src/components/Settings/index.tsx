@@ -221,6 +221,7 @@ class Settings extends Component<SettingsProps> {
                                     processingReset={stats.processingReset}
                                     setStatsConfig={setStatsConfig}
                                     resetStats={resetStats}
+                                    storageType={queryLogs.storage_type}
                                 />
                             </div>
                         </div>

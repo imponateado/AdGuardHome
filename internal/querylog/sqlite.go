@@ -37,11 +37,11 @@ func initDB(path string) (*sql.DB, error) {
 
 	_, err = db.Exec(query)
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("creating table: %w", err)
 	}
 
-	db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
+	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
 
 	return db, nil
 }
@@ -59,7 +59,7 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
 
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
 		`
@@ -70,7 +70,7 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("preparing statement: %w", err)
 	}
-	defer stmt.Close()
+	defer func() { _ = stmt.Close() }()
 
 	var execErr error
 	l.buffer.Range(func(entry *logEntry) bool {
@@ -82,14 +82,14 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 		responseCode := ""
 		if len(entry.Answer) > 0 {
 			msg := &dns.Msg{}
-			if err := msg.Unpack(entry.Answer); err == nil {
+			if unpackErr := msg.Unpack(entry.Answer); unpackErr == nil {
 				responseCode = dns.RcodeToString[msg.Rcode]
 			}
 		}
 
-		resBytes, err := json.Marshal(entry.Result)
-		if err != nil {
-			l.logger.ErrorContext(ctx, "marshaling filtering result", slogutil.KeyError, err)
+		resBytes, marshalErr := json.Marshal(entry.Result)
+		if marshalErr != nil {
+			l.logger.ErrorContext(ctx, "marshaling filtering result", slogutil.KeyError, marshalErr)
 			resBytes = []byte("{}")
 		}
 
@@ -136,32 +136,7 @@ func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*l
 			pattern := "%" + c.value + "%"
 			args = append(args, pattern, pattern, pattern)
 		} else if c.criterionType == ctFilteringStatus {
-			// Mapping based on internal/querylog/searchcriterion.go
-			switch c.value {
-			case filteringStatusAll:
-				// No-op
-			case filteringStatusFiltered:
-				// IsFiltered OR Reason in (AllowList, Rewritten, RewrittenAutoHosts, RewrittenRule)
-				query += " AND (json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) OR json_extract(filtering_result, '$.Reason') IN (1, 9, 10, 11))"
-			case filteringStatusBlocked:
-				// IsFiltered AND Reason in (BlockList, BlockedService)
-				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') IN (3, 8)"
-			case filteringStatusBlockedService:
-				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 8"
-			case filteringStatusBlockedSafebrowsing:
-				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 4"
-			case filteringStatusBlockedParental:
-				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 5"
-			case filteringStatusWhitelisted:
-				query += " AND json_extract(filtering_result, '$.Reason') = 1"
-			case filteringStatusRewritten:
-				query += " AND json_extract(filtering_result, '$.Reason') IN (9, 10, 11)"
-			case filteringStatusSafeSearch:
-				query += " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 7"
-			case filteringStatusProcessed:
-				// NOT IN (BlockList, BlockedService, AllowList)
-				query += " AND json_extract(filtering_result, '$.Reason') NOT IN (3, 8, 1)"
-			}
+			query += filteringStatusConditions[c.value]
 		}
 	}
 
@@ -181,71 +156,73 @@ func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*l
 	if err != nil {
 		return nil, fmt.Errorf("querying sqlite: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var entries []*logEntry
 	for rows.Next() {
-		var ts int64
-		var qHost, qType, clientID, clientIPStr, upstream, respCode string
-		var elapsedNs int64
-		var filteringResultJSON sql.NullString
-
-		err := rows.Scan(&ts, &qHost, &qType, &clientID, &clientIPStr, &upstream, &elapsedNs, &respCode, &filteringResultJSON)
-		if err != nil {
-			fmt.Errorf("error: %w", err)
+		entry, scanErr := scanLogEntry(rows)
+		if scanErr != nil {
+			l.logger.ErrorContext(ctx, "scanning sqlite row", slogutil.KeyError, scanErr)
 			continue
 		}
 
-		entry := &logEntry{
-			Time:     time.Unix(0, ts),
-			QHost:    qHost,
-			QType:    qType,
-			ClientID: clientID,
-			IP:       net.ParseIP(clientIPStr),
-			Upstream: upstream,
-			Elapsed:  time.Duration(elapsedNs),
-		}
+		entries = append(entries, entry)
+	}
 
-		if filteringResultJSON.Valid && filteringResultJSON.String != "" {
-			_ = json.Unmarshal([]byte(filteringResultJSON.String), &entry.Result)
-		}
+	return entries, nil
+}
 
-				entries = append(entries, entry)
+func scanLogEntry(rows *sql.Rows) (*logEntry, error) {
+	var ts int64
+	var qHost, qType, clientID, clientIPStr, upstream, respCode string
+	var elapsedNs int64
+	var filteringResultJSON sql.NullString
 
-			}
+	err := rows.Scan(&ts, &qHost, &qType, &clientID, &clientIPStr, &upstream, &elapsedNs, &respCode, &filteringResultJSON)
+	if err != nil {
+		return nil, err
+	}
 
-		
+	entry := &logEntry{
+		Time:     time.Unix(0, ts),
+		QHost:    qHost,
+		QType:    qType,
+		ClientID: clientID,
+		IP:       net.ParseIP(clientIPStr),
+		Upstream: upstream,
+		Elapsed:  time.Duration(elapsedNs),
+	}
 
-			return entries, nil
+	if filteringResultJSON.Valid && filteringResultJSON.String != "" {
+		_ = json.Unmarshal([]byte(filteringResultJSON.String), &entry.Result)
+	}
 
-		}
+	return entry, nil
+}
 
-		
+var filteringStatusConditions = map[string]string{
+	filteringStatusFiltered:            " AND (json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) OR json_extract(filtering_result, '$.Reason') IN (1, 9, 10, 11))",
+	filteringStatusBlocked:             " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') IN (3, 8)",
+	filteringStatusBlockedService:      " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 8",
+	filteringStatusBlockedSafebrowsing: " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 4",
+	filteringStatusBlockedParental:     " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 5",
+	filteringStatusWhitelisted:         " AND json_extract(filtering_result, '$.Reason') = 1",
+	filteringStatusRewritten:           " AND json_extract(filtering_result, '$.Reason') IN (9, 10, 11)",
+	filteringStatusSafeSearch:          " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 7",
+	filteringStatusProcessed:           " AND json_extract(filtering_result, '$.Reason') NOT IN (3, 8, 1)",
+}
 
-		func (l *queryLog) deleteOld(ctx context.Context, olderThan time.Time) error {
+func (l *queryLog) deleteOld(ctx context.Context, olderThan time.Time) error {
+	l.logger.DebugContext(ctx, "deleting old sqlite entries", "older_than", olderThan)
 
-			l.logger.DebugContext(ctx, "deleting old sqlite entries", "older_than", olderThan)
+	res, err := l.db.ExecContext(ctx, "DELETE FROM query_log WHERE timestamp < ?", olderThan.UnixNano())
+	if err != nil {
+		return fmt.Errorf("deleting old entries: %w", err)
+	}
 
-		
+	rowsAffected, _ := res.RowsAffected()
 
-			res, err := l.db.ExecContext(ctx, "DELETE FROM query_log WHERE timestamp < ?", olderThan.UnixNano())
+	l.logger.DebugContext(ctx, "deleted old sqlite entries", "count", rowsAffected)
 
-			if err != nil {
-
-				return fmt.Errorf("deleting old entries: %w", err)
-
-			}
-
-		
-
-			rowsAffected, _ := res.RowsAffected()
-
-			l.logger.DebugContext(ctx, "deleted old sqlite entries", "count", rowsAffected)
-
-		
-
-			return nil
-
-		}
-
-		
+	return nil
+}

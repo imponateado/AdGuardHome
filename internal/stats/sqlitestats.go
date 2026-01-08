@@ -19,22 +19,19 @@ import (
 
 // sqliteStats implements the Interface using direct SQL queries on QueryLog DB.
 type sqliteStats struct {
-	logger *slog.Logger
-
-	queryLog QueryLogReader
-
+	queryLog          QueryLogReader
+	configModifier    agh.ConfigModifier
+	httpReg           aghhttp.Registrar
+	logger            *slog.Logger
 	confMu            *sync.RWMutex
 	ignored           *aghnet.IgnoreEngine
 	shouldCountClient func([]string) bool
 	limit             time.Duration
 	enabled           bool
-
-	configModifier agh.ConfigModifier
-	httpReg        aghhttp.Registrar
 }
 
 // newSqliteStats creates a new sqliteStats instance.
-func newSqliteStats(conf Config) (Interface, error) {
+func newSqliteStats(conf Config) Interface {
 	s := &sqliteStats{
 		logger:            conf.Logger,
 		queryLog:          conf.QueryLog, // Store the interface
@@ -47,7 +44,7 @@ func newSqliteStats(conf Config) (Interface, error) {
 		httpReg:           conf.HTTPReg,
 	}
 
-	return s, nil
+	return s
 }
 
 func (s *sqliteStats) Start() {
@@ -105,14 +102,14 @@ func (s *sqliteStats) TopClientsIP(limit uint) []netip.Addr {
 		s.logger.Error("querying top clients", slogutil.KeyError, err)
 		return nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ips []netip.Addr
 	for rows.Next() {
 		var ipStr string
 		var count int
-		if err := rows.Scan(&ipStr, &count); err == nil {
-			if ip, err := netip.ParseAddr(ipStr); err == nil {
+		if scanErr := rows.Scan(&ipStr, &count); scanErr == nil {
+			if ip, parseErr := netip.ParseAddr(ipStr); parseErr == nil {
 				ips = append(ips, ip)
 			}
 		}
@@ -134,20 +131,14 @@ func (s *sqliteStats) handleStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var resp *StatsResp
-	var err error
 
 	func() {
 		s.confMu.RLock()
 		defer s.confMu.RUnlock()
-		resp, err = s.getStatsData(ctx, s.limit) // Pass context for Flush
+		resp = s.getStatsData(ctx, s.limit) // Pass context for Flush
 	}()
 
 	s.logger.DebugContext(ctx, "prepared sqlite data", "elapsed", time.Since(start))
-
-	if err != nil {
-		aghhttp.ErrorAndLog(ctx, s.logger, r, w, http.StatusInternalServerError, "getting stats: %s", err)
-		return
-	}
 
 	aghhttp.WriteJSONResponseOK(ctx, s.logger, w, r, resp)
 }
@@ -211,7 +202,7 @@ func (s *sqliteStats) handlePutStatsConfig(w http.ResponseWriter, r *http.Reques
 
 // Data Retrieval Logic
 
-func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*StatsResp, error) {
+func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *StatsResp {
 	resp := &StatsResp{
 		TimeUnits: "hours",
 
@@ -228,7 +219,7 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*S
 	}
 
 	if !s.enabled || limit == 0 {
-		return resp, nil
+		return resp
 	}
 
 	// FORCE FLUSH BEFORE QUERYING
@@ -307,7 +298,7 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) (*S
 		ORDER BY 2 ASC
 		LIMIT ?`, olderThan)
 
-	return resp, nil
+	return resp
 }
 
 func (s *sqliteStats) getTopMap(db *sql.DB, query string, olderThan int64) []map[string]uint64 {
@@ -318,14 +309,14 @@ func (s *sqliteStats) getTopMap(db *sql.DB, query string, olderThan int64) []map
 		s.logger.Error("querying top", slogutil.KeyError, err)
 		return res
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	count := 0
 	for rows.Next() {
 		count++
 		var name string
 		var count uint64
-		if err := rows.Scan(&name, &count); err == nil {
+		if scanErr := rows.Scan(&name, &count); scanErr == nil {
 			res = append(res, map[string]uint64{name: count})
 		}
 	}
@@ -341,12 +332,12 @@ func (s *sqliteStats) getTopMapFloat(db *sql.DB, query string, olderThan int64) 
 		s.logger.Error("querying top float", slogutil.KeyError, err)
 		return res
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name string
 		var val float64
-		if err := rows.Scan(&name, &val); err == nil {
+		if scanErr := rows.Scan(&name, &val); scanErr == nil {
 			res = append(res, map[string]float64{name: val})
 		}
 	}

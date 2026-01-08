@@ -172,7 +172,7 @@ func New(conf Config) (s Interface, err error) {
 	}
 
 	if conf.QueryLog != nil && conf.QueryLog.GetSQLDB() != nil {
-		return newSqliteStats(conf)
+		return newSqliteStats(conf), nil
 	}
 
 	ctx := &StatsCtx{

@@ -10,11 +10,14 @@ import (
 
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/miekg/dns"
+	"github.com/pbnjay/memory"
 	_ "modernc.org/sqlite"
 )
 
 func initDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
+	dsn := getSQLiteDSN(path)
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open SQLite database: %w", err)
 	}
@@ -225,4 +228,27 @@ func (l *queryLog) deleteOld(ctx context.Context, olderThan time.Time) error {
 	l.logger.DebugContext(ctx, "deleted old sqlite entries", "count", rowsAffected)
 
 	return nil
+}
+
+func getSQLiteDSN(path string) (dsn string) {
+	totalMem := memory.TotalMemory()
+
+	const cachePercentage = 0.03
+	cacheSizeKB := int(float64(totalMem) * cachePercentage / 1024)
+
+	if cacheSizeKB < 2000 {
+		cacheSizeKB = 2000
+	}
+
+	dsn = fmt.Sprintf(
+		"file:%s?_pragma=journal_mode=WAL&_pragma=synchronous=NORMAL&_pragma=cache_size=-%d",
+		path,
+		cacheSizeKB,
+	)
+
+	if totalMem > 1024*1024*1024 {
+		dsn += "&_pragma=temp_store=MEMORY"
+	}
+
+	return dsn
 }

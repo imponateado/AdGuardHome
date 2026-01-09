@@ -758,5 +758,10 @@
     "saturday_short": "Sub",
     "upstream_dns_cache_configuration": "Konfiguracija keša upstream DNS servera",
     "enable_upstream_dns_cache": "Uključite keširanje za korisničku konfiguraciju upstream servera ovog klijenta",
-    "dns_cache_size": "Veličina DNS keša, u bajtovima"
+    "dns_cache_size": "Veličina DNS keša, u bajtovima",
+    "storage_type_config_title": "Механизам за складиштење",
+    "storage_type_option_json": "JSON датотека (подразумевано)",
+    "storage_type_option_sqlite": "SQLite база података (оптимизована за перформансе)",
+    "storage_type_note": "Напомена: Промена ове поставке може захтевати поновно покретање.",
+    "on_stats_config_storage_type_info": "Када је изабран SQLite, ова поставка дефинише период анализе за израчунавање статистике. Краћи периоди значајно побољшавају перформансе контролне табле."
 }

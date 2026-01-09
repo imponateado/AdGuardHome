@@ -758,5 +758,10 @@
     "saturday_short": "Sobota",
     "upstream_dns_cache_configuration": "Konfigurace mezipaměti odchozího DNS",
     "enable_upstream_dns_cache": "Povolit ukládání do mezipaměti DNS pro vlastní konfiguraci odchozího připojení tohoto klienta",
-    "dns_cache_size": "Velikost mezipaměti DNS v bajtech"
+    "dns_cache_size": "Velikost mezipaměti DNS v bajtech",
+    "storage_type_config_title": "Úložiště",
+    "storage_type_option_json": "Soubor JSON (výchozí)",
+    "storage_type_option_sqlite": "Databáze SQLite (optimalizováno pro výkon)",
+    "storage_type_note": "Poznámka: Po změně tohoto nastavení může být nutné restartování.",
+    "on_stats_config_storage_type_info": "Při zvolení SQLite toto nastavení určuje období analýzy pro výpočet statistik. Kratší období výrazně zlepšují výkon panelu."
 }

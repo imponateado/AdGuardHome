@@ -758,5 +758,10 @@
     "saturday_short": "土",
     "upstream_dns_cache_configuration": "Upstream DNS cache configuration（アップストリームDNSキャッシュの構成）",
     "enable_upstream_dns_cache": "このクライアントのカスタムアップストリーム構成に対してDNSキャッシュを有効にする",
-    "dns_cache_size": "DNSキャッシュサイズ（バイト単位）"
+    "dns_cache_size": "DNSキャッシュサイズ（バイト単位）",
+    "storage_type_config_title": "ストレージエンジン",
+    "storage_type_option_json": "JSONファイル（デフォルト）",
+    "storage_type_option_sqlite": "SQLiteデータベース（パフォーマンス最適化）",
+    "storage_type_note": "注意: この設定を変更すると、変更を反映するために再起動が必要になる場合があります。",
+    "on_stats_config_storage_type_info": "SQLiteを選択すると、この設定は統計計算のための分析期間を定義します。期間を短くすると、ダッシュボードのパフォーマンスが大幅に向上します。"
 }

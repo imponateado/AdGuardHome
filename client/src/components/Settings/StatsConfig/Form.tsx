@@ -103,8 +103,7 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
             <div className="form__desc form__desc--top">
                 {storageType === 'sqlite' ? (
                     <span className="text-warning">
-                        With SQLite enabled, this setting defines the analysis period for calculating statistics. 
-                        Shorter periods significantly improve dashboard performance.
+                        <Trans>on_stats_config_storage_type_info</Trans>
                     </span>
                 ) : (
                     <Trans>statistics_retention_desc</Trans>

@@ -758,5 +758,10 @@
     "saturday_short": "토",
     "upstream_dns_cache_configuration": "업스트림 DNS 캐시 설정",
     "enable_upstream_dns_cache": "이 클라이언트의 사용자 지정 업스트림 설정에서 DNS 캐싱 사용",
-    "dns_cache_size": "DNS 캐시 크기(바이트)"
+    "dns_cache_size": "DNS 캐시 크기(바이트)",
+    "storage_type_config_title": "저장소 엔진",
+    "storage_type_option_json": "JSON 파일 (기본값)",
+    "storage_type_option_sqlite": "SQLite 데이터베이스 (성능 최적화)",
+    "storage_type_note": "참고: 이 설정을 변경하면 변경 사항을 적용하기 위해 재시작이 필요할 수 있습니다.",
+    "on_stats_config_storage_type_info": "SQLite를 선택하면 이 설정은 통계 계산을 위한 분석 기간을 정의합니다. 더 짧은 기간은 대시보드 성능을 크게 향상시킵니다."
 }

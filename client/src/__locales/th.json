@@ -758,5 +758,10 @@
     "saturday_short": "เสาร์",
     "upstream_dns_cache_configuration": "การกำหนดค่าแคช DNS สำหรับเซิร์ฟเวอร์ต้นทาง",
     "enable_upstream_dns_cache": "เปิดใช้งานการแคช DNS สำหรับการกำหนดค่าสำหรับลูกค้ารายนี้",
-    "dns_cache_size": "ขนาดแคช DNS, เป็นไบต์"
+    "dns_cache_size": "ขนาดแคช DNS, เป็นไบต์",
+    "storage_type_config_title": "เอนจินจัดเก็บข้อมูล",
+    "storage_type_option_json": "ไฟล์ JSON (ค่าเริ่มต้น)",
+    "storage_type_option_sqlite": "ฐานข้อมูล SQLite (ปรับแต่งเพื่อประสิทธิภาพ)",
+    "storage_type_note": "หมายเหตุ: การเปลี่ยนการตั้งค่านี้อาจต้องรีสตาร์ตเพื่อให้การเปลี่ยนแปลงมีผล",
+    "on_stats_config_storage_type_info": "เมื่อเลือก SQLite การตั้งค่านี้จะกำหนดช่วงเวลาการวิเคราะห์สำหรับการคำนวณสถิติ ช่วงเวลาที่สั้นลงจะช่วยเพิ่มประสิทธิภาพแดชบอร์ดอย่างมาก"
 }

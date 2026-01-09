@@ -758,5 +758,10 @@
     "saturday_short": "La",
     "upstream_dns_cache_configuration": "Ylävirran DNS-välimuistin määritykset",
     "enable_upstream_dns_cache": "Käytä DNS-välimuistia tämän päätelaitteen mukautetuissa ylävirtamäärityksissä",
-    "dns_cache_size": "DNS-välimuistin koko tavuina"
+    "dns_cache_size": "DNS-välimuistin koko tavuina",
+    "storage_type_config_title": "Tallennusmoottori",
+    "storage_type_option_json": "JSON-tiedosto (oletus)",
+    "storage_type_option_sqlite": "SQLite-tietokanta (optimoitu suorituskykyä varten)",
+    "storage_type_note": "Huomautus: Tämän asetuksen muuttaminen saattaa vaatia uudelleenkäynnistyksen.",
+    "on_stats_config_storage_type_info": "Kun SQLite on valittuna, tämä asetus määrittää analyysijakson tilastojen laskentaa varten. Lyhyemmät jaksot parantavat hallintapaneelin suorituskykyä merkittävästi."
 }

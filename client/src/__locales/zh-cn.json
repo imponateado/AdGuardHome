@@ -758,5 +758,10 @@
     "saturday_short": "周六",
     "upstream_dns_cache_configuration": "上游 DNS 缓存配置",
     "enable_upstream_dns_cache": "为该客户端的自定义上游配置启用 DNS 缓存",
-    "dns_cache_size": "DNS 缓存大小，单位：字节"
+    "dns_cache_size": "DNS 缓存大小，单位：字节",
+    "storage_type_config_title": "存储引擎",
+    "storage_type_option_json": "JSON 文件（默认）",
+    "storage_type_option_sqlite": "SQLite 数据库（性能优化）",
+    "storage_type_note": "注意：更改此设置后，可能需要重新启动才能生效。",
+    "on_stats_config_storage_type_info": "选择 SQLite 后，此设置将定义用于统计计算的分析周期。较短的周期可显著提升仪表板性能。"
 }

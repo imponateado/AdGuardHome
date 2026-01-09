@@ -758,5 +758,10 @@
     "saturday_short": "Cmt",
     "upstream_dns_cache_configuration": "Üst kaynak DNS önbellek yapılandırması",
     "enable_upstream_dns_cache": "Bu istemcinin özel üst kaynak yapılandırması için DNS önbelleğini etkinleştir",
-    "dns_cache_size": "DNS önbellek boyutu, bayt cinsinden"
+    "dns_cache_size": "DNS önbellek boyutu, bayt cinsinden",
+    "storage_type_config_title": "Depolama motoru",
+    "storage_type_option_json": "JSON dosyası (varsayılan)",
+    "storage_type_option_sqlite": "SQLite veritabanı (performans için optimize edilmiştir)",
+    "storage_type_note": "Not: Bu ayarın değiştirilmesi, değişikliklerin geçerli olması için yeniden başlatma gerektirebilir.",
+    "on_stats_config_storage_type_info": "SQLite seçildiğinde, bu ayar istatistik hesaplamaları için analiz süresini belirler. Daha kısa süreler kontrol paneli performansını önemli ölçüde artırır."
 }

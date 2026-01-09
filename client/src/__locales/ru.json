@@ -758,5 +758,10 @@
     "saturday_short": "Сб",
     "upstream_dns_cache_configuration": "Конфигурация кеша upstream DNS-серверов",
     "enable_upstream_dns_cache": "Включить кеширование для пользовательской конфигурации upstream-серверов этого клиента",
-    "dns_cache_size": "Размер DNS-кеша в байтах"
+    "dns_cache_size": "Размер DNS-кеша в байтах",
+    "storage_type_config_title": "Механизм хранения",
+    "storage_type_option_json": "Файл JSON (по умолчанию)",
+    "storage_type_option_sqlite": "База данных SQLite (оптимизирована для производительности)",
+    "storage_type_note": "Примечание: Изменение этого параметра может потребовать перезапуска.",
+    "on_stats_config_storage_type_info": "При выборе SQLite этот параметр определяет период анализа для расчёта статистики. Более короткие периоды значительно повышают производительность панели."
 }

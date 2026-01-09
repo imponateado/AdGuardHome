@@ -758,5 +758,10 @@
     "saturday_short": "Sob",
     "upstream_dns_cache_configuration": "Konfigurácia cache pamäte DNS pre upstream",
     "enable_upstream_dns_cache": "Zapnúť ukladanie DNS do cache pamäte pre vlastnú konfiguráciu odosielania tohto klienta",
-    "dns_cache_size": "Veľkosť cache pamäte DNS v bajtoch"
+    "dns_cache_size": "Veľkosť cache pamäte DNS v bajtoch",
+    "storage_type_config_title": "Úložný modul",
+    "storage_type_option_json": "Súbor JSON (predvolené)",
+    "storage_type_option_sqlite": "Databáza SQLite (optimalizovaná na výkon)",
+    "storage_type_note": "Poznámka: Zmena tohto nastavenia môže vyžadovať reštart.",
+    "on_stats_config_storage_type_info": "Pri výbere SQLite toto nastavenie určuje obdobie analýzy na výpočet štatistík. Kratšie obdobia výrazne zlepšujú výkon panela."
 }

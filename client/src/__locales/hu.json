@@ -758,5 +758,10 @@
     "saturday_short": "Szom",
     "upstream_dns_cache_configuration": "Upstream DNS gyorsítótár konfigurációja",
     "enable_upstream_dns_cache": "A DNS gyorsítótárazásának engedélyezése az ügyfél egyéni upstream konfigurációjához",
-    "dns_cache_size": "DNS gyorsítótár mérete, bájtokban"
+    "dns_cache_size": "DNS gyorsítótár mérete, bájtokban",
+    "storage_type_config_title": "Tárolómotor",
+    "storage_type_option_json": "JSON fájl (alapértelmezett)",
+    "storage_type_option_sqlite": "SQLite adatbázis (teljesítményre optimalizálva)",
+    "storage_type_note": "Megjegyzés: A beállítás módosítása után újraindításra lehet szükség.",
+    "on_stats_config_storage_type_info": "SQLite használata esetén ez a beállítás határozza meg a statisztikák számításához használt elemzési időszakot. Rövidebb időszakok jelentősen javítják az irányítópult teljesítményét."
 }

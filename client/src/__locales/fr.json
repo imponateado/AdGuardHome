@@ -758,5 +758,10 @@
     "saturday_short": "Sam.",
     "upstream_dns_cache_configuration": "Configuration du cache DNS en amont",
     "enable_upstream_dns_cache": "Activer la mise en cache pour la configuration personnalisée du serveur en amont de ce client",
-    "dns_cache_size": "Taille du cache DNS, en bytes"
+    "dns_cache_size": "Taille du cache DNS, en bytes",
+    "storage_type_config_title": "Moteur de stockage",
+    "storage_type_option_json": "Fichier JSON (par défaut)",
+    "storage_type_option_sqlite": "Base de données SQLite (optimisée pour les performances)",
+    "storage_type_note": "Remarque : La modification de ce paramètre peut nécessiter un redémarrage pour que les changements prennent effet.",
+    "on_stats_config_storage_type_info": "Lorsque SQLite est sélectionné, ce paramètre définit la période d’analyse pour le calcul des statistiques. Des périodes plus courtes améliorent considérablement les performances du tableau de bord."
 }

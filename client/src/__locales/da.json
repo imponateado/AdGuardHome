@@ -758,5 +758,10 @@
     "saturday_short": "Lør",
     "upstream_dns_cache_configuration": "Upstream DNS-cacheopsætning",
     "enable_upstream_dns_cache": "Aktivér DNS-cachelagring for denne klients tilpassede upstream-opsætning",
-    "dns_cache_size": "DNS-cachestørrelse i bytes"
+    "dns_cache_size": "DNS-cachestørrelse i bytes",
+    "storage_type_config_title": "Lagringsmotor",
+    "storage_type_option_json": "JSON-fil (standard)",
+    "storage_type_option_sqlite": "SQLite-database (optimeret til ydeevne)",
+    "storage_type_note": "Bemærk: Det kan være nødvendigt at genstarte efter ændring af denne indstilling.",
+    "on_stats_config_storage_type_info": "Når SQLite er valgt, fastlægger denne indstilling analyseperioden for beregning af statistikker. Kortere perioder forbedrer dashboardets ydeevne markant."
 }

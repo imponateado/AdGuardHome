@@ -758,5 +758,10 @@
     "saturday_short": "Sob",
     "upstream_dns_cache_configuration": "Konfiguracja pamięci podręcznej upstream serwerów DNS",
     "enable_upstream_dns_cache": "Włącz pamięć podręczną dla niestandardowej konfiguracji serwera upstream tego klienta",
-    "dns_cache_size": "Rozmiar pamięci podręcznej DNS, w bajtach"
+    "dns_cache_size": "Rozmiar pamięci podręcznej DNS, w bajtach",
+    "storage_type_config_title": "Silnik pamięci masowej",
+    "storage_type_option_json": "Plik JSON (domyślny)",
+    "storage_type_option_sqlite": "Baza danych SQLite (zoptymalizowana pod kątem wydajności)",
+    "storage_type_note": "Uwaga: Zmiana tego ustawienia może wymagać ponownego uruchomienia.",
+    "on_stats_config_storage_type_info": "Po wybraniu SQLite to ustawienie określa okres analizy do obliczania statystyk. Krótsze okresy znacząco poprawiają wydajność panelu."
 }

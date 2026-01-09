@@ -758,5 +758,10 @@
     "saturday_short": "sa",
     "upstream_dns_cache_configuration": "Configurarea cache-ului DNS în amonte",
     "enable_upstream_dns_cache": "Activați memoria cache DNS pentru configurația personalizată în amonte a acestui client",
-    "dns_cache_size": "Dimensiunea cache-ului DNS, în octeți"
+    "dns_cache_size": "Dimensiunea cache-ului DNS, în octeți",
+    "storage_type_config_title": "Motor de stocare",
+    "storage_type_option_json": "Fișier JSON (implicit)",
+    "storage_type_option_sqlite": "Bază de date SQLite (optimizată pentru performanță)",
+    "storage_type_note": "Notă: Modificarea acestei setări poate necesita repornirea.",
+    "on_stats_config_storage_type_info": "Cu SQLite selectat, această setare definește perioada de analiză pentru calculul statisticilor. Perioadele mai scurte îmbunătățesc semnificativ performanța tabloului de bord."
 }

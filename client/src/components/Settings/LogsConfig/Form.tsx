@@ -133,7 +133,7 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
             </div>
 
             <div className="form__label">
-                Storage Engine
+                <Trans>storage_type_config_title</Trans>
             </div>
 
             <div className="form__group form__group--settings">
@@ -147,7 +147,7 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
                             checked={storageTypeValue === 'json'}
                             onChange={() => setValue('storage_type', 'json')}
                         />
-                        <span className="custom-control-label">JSON File (Standard)</span>
+                        <span className="custom-control-label"><Trans>storage_type_option_json</Trans></span>
                     </label>
 
                     <label className="custom-control custom-radio">
@@ -159,11 +159,11 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
                             checked={storageTypeValue === 'sqlite'}
                             onChange={() => setValue('storage_type', 'sqlite')}
                         />
-                        <span className="custom-control-label">SQLite Database (Optimized for performance)</span>
+                        <span className="custom-control-label"><Trans>storage_type_option_sqlite</Trans></span>
                     </label>
                 </div>
                 <div className="form__desc">
-                    Note: Changing this setting may require a restart to take effect.
+                    <Trans>storage_type_note</Trans>
                 </div>
             </div>
 

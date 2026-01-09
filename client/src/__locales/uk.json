@@ -758,5 +758,10 @@
     "saturday_short": "СБ",
     "upstream_dns_cache_configuration": "Конфігурація кешу upstream DNS-серверів",
     "enable_upstream_dns_cache": "Увімкнути кешування для користувацької конфігурації upstream-серверів цього клієнта",
-    "dns_cache_size": "Розмір кешу DNS, у байтах"
+    "dns_cache_size": "Розмір кешу DNS, у байтах",
+    "storage_type_config_title": "Механізм зберігання",
+    "storage_type_option_json": "Файл JSON (за замовчуванням)",
+    "storage_type_option_sqlite": "База даних SQLite (оптимізована для продуктивності)",
+    "storage_type_note": "Примітка: Зміна цього параметра може вимагати перезапуску.",
+    "on_stats_config_storage_type_info": "Якщо вибрано SQLite, цей параметр визначає період аналізу для обчислення статистики. Коротші періоди значно покращують продуктивність панелі."
 }

@@ -758,5 +758,10 @@
     "saturday_short": "Sab",
     "upstream_dns_cache_configuration": "Konfigurasi cache DNS hulu",
     "enable_upstream_dns_cache": "Aktifkan cache DNS untuk konfigurasi hulu kustom pada klien ini",
-    "dns_cache_size": "Ukuran cache DNS, dalam byte"
+    "dns_cache_size": "Ukuran cache DNS, dalam byte",
+    "storage_type_config_title": "Mesin penyimpanan",
+    "storage_type_option_json": "File JSON (default)",
+    "storage_type_option_sqlite": "Database SQLite (dioptimalkan untuk performa)",
+    "storage_type_note": "Catatan: Mengubah pengaturan ini mungkin memerlukan restart agar perubahan diterapkan.",
+    "on_stats_config_storage_type_info": "Saat SQLite dipilih, pengaturan ini menentukan periode analisis untuk perhitungan statistik. Periode yang lebih pendek secara signifikan meningkatkan performa dasbor."
 }

@@ -758,5 +758,10 @@
     "saturday_short": "شنبه",
     "upstream_dns_cache_configuration": "پیکربندی نهانگاه DNS بالادست",
     "enable_upstream_dns_cache": "ذخیره DNS را برای پیکربندی بالادستی سفارشی این مشتری فعال کنید",
-    "dns_cache_size": "اندازه کش DNS، بر حسب بایت"
+    "dns_cache_size": "اندازه کش DNS، بر حسب بایت",
+    "storage_type_config_title": "موتور ذخیره‌سازی",
+    "storage_type_option_json": "فایل JSON (پیش‌فرض)",
+    "storage_type_option_sqlite": "پایگاه داده SQLite (بهینه‌شده برای عملکرد)",
+    "storage_type_note": "توجه: پس از تغییر این تنظیمات ممکن است نیاز به راه‌اندازی مجدد باشد.",
+    "on_stats_config_storage_type_info": "در صورت انتخاب SQLite، این تنظیمات بازه تحلیل برای محاسبه آمار را مشخص می‌کند. بازه‌های کوتاه‌تر عملکرد داشبورد را به‌طور قابل توجهی بهبود می‌دهند."
 }

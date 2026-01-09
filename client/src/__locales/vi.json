@@ -758,5 +758,10 @@
     "saturday_short": "Thứ 7",
     "upstream_dns_cache_configuration": "Cấu hình bộ nhớ đệm upstream của các máy chủ DNS",
     "enable_upstream_dns_cache": "Bật bộ nhớ cache cho cấu hình ngược dòng của máy chủ upstream của khách hàng này",
-    "dns_cache_size": "Kích thước bộ nhớ cache DNS, tính bằng byte"
+    "dns_cache_size": "Kích thước bộ nhớ cache DNS, tính bằng byte",
+    "storage_type_config_title": "Công cụ lưu trữ",
+    "storage_type_option_json": "Tệp JSON (mặc định)",
+    "storage_type_option_sqlite": "Cơ sở dữ liệu SQLite (tối ưu cho hiệu năng)",
+    "storage_type_note": "Lưu ý: Việc thay đổi cài đặt này có thể yêu cầu khởi động lại để có hiệu lực.",
+    "on_stats_config_storage_type_info": "Khi chọn SQLite, cài đặt này xác định khoảng thời gian phân tích để tính toán thống kê. Khoảng thời gian ngắn hơn cải thiện đáng kể hiệu năng bảng điều khiển."
 }

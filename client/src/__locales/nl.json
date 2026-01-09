@@ -758,5 +758,10 @@
     "saturday_short": "za",
     "upstream_dns_cache_configuration": "Upstream DNS-cacheconfiguratie",
     "enable_upstream_dns_cache": "DNS-caching inschakelen voor de aangepaste upstream-configuratie van deze client",
-    "dns_cache_size": "DNS-cachegrootte, in bytes"
+    "dns_cache_size": "DNS-cachegrootte, in bytes",
+    "storage_type_config_title": "Opslagengine",
+    "storage_type_option_json": "JSON-bestand (standaard)",
+    "storage_type_option_sqlite": "SQLite-database (geoptimaliseerd voor prestaties)",
+    "storage_type_note": "Opmerking: Het wijzigen van deze instelling kan een herstart vereisen.",
+    "on_stats_config_storage_type_info": "Wanneer SQLite is geselecteerd, bepaalt deze instelling de analyseperiode voor het berekenen van statistieken. Kortere periodes verbeteren de dashboardprestaties aanzienlijk."
 }

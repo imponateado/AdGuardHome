@@ -753,5 +753,10 @@
     "saturday_short": "週六",
     "upstream_dns_cache_configuration": "上游 DNS 快取設定",
     "enable_upstream_dns_cache": "為此客戶端的自訂上游設定啟用 DNS 快取",
-    "dns_cache_size": "DNS 快取大小（bytes）"
+    "dns_cache_size": "DNS 快取大小（bytes）",
+    "storage_type_config_title": "儲存引擎",
+    "storage_type_option_json": "JSON 檔案（預設）",
+    "storage_type_option_sqlite": "SQLite 資料庫（效能最佳化）",
+    "storage_type_note": "注意：更改此設定後，可能需要重新啟動才能生效。",
+    "on_stats_config_storage_type_info": "選擇 SQLite 後，此設定會定義用於統計計算的分析期間。較短的期間可大幅提升儀表板效能。"
 }

@@ -758,5 +758,10 @@
     "saturday_short": "Sob",
     "upstream_dns_cache_configuration": "Nastavitve predpomnilnika gorvodnega DNS",
     "enable_upstream_dns_cache": "Omogoči predpomnjenje nastavitev gorvodnega DNS po meri tega odjemalca",
-    "dns_cache_size": "Velikost predpomnilnika DNS, v bajtih"
+    "dns_cache_size": "Velikost predpomnilnika DNS, v bajtih",
+    "storage_type_config_title": "Shranjevalni mehanizem",
+    "storage_type_option_json": "JSON datoteka (privzeto)",
+    "storage_type_option_sqlite": "SQLite podatkovna baza (optimizirana za zmogljivost)",
+    "storage_type_note": "Opomba: Sprememba te nastavitve lahko zahteva ponovni zagon.",
+    "on_stats_config_storage_type_info": "Ko je izbran SQLite, ta nastavitev določa obdobje analize za izračun statistike. Krajša obdobja bistveno izboljšajo delovanje nadzorne plošče."
 }

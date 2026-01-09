@@ -758,5 +758,10 @@
     "saturday_short": "Sab",
     "upstream_dns_cache_configuration": "Configurazione cache DNS upstream",
     "enable_upstream_dns_cache": "Abilita cache DNS per la configurazione upstream personalizzata del client",
-    "dns_cache_size": "Dimensioni cache DNS (in byte)"
+    "dns_cache_size": "Dimensioni cache DNS (in byte)",
+    "storage_type_config_title": "Motore di archiviazione",
+    "storage_type_option_json": "File JSON (predefinito)",
+    "storage_type_option_sqlite": "Database SQLite (ottimizzato per le prestazioni)",
+    "storage_type_note": "Nota: La modifica di questa impostazione potrebbe richiedere un riavvio.",
+    "on_stats_config_storage_type_info": "Con SQLite selezionato, questa impostazione definisce il periodo di analisi per il calcolo delle statistiche. Periodi più brevi migliorano significativamente le prestazioni della dashboard."
 }

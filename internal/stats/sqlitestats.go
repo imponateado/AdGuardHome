@@ -241,9 +241,9 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 	queryTimeSeriesFixed := `
 		SELECT 
 			COUNT(*) as total,
-			SUM(CASE WHEN json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) THEN 1 ELSE 0 END) as blocked,
-			SUM(CASE WHEN json_extract(filtering_result, '$.Reason') = 4 THEN 1 ELSE 0 END) as safe_browsing, 
-			SUM(CASE WHEN json_extract(filtering_result, '$.Reason') = 5 THEN 1 ELSE 0 END) as parental
+			SUM(CASE WHEN is_filtered = 1 THEN 1 ELSE 0 END) as blocked,
+			SUM(CASE WHEN reason = 4 THEN 1 ELSE 0 END) as safe_browsing, 
+			SUM(CASE WHEN reason = 5 THEN 1 ELSE 0 END) as parental
 		FROM query_log
 		WHERE timestamp > ?
 	`
@@ -264,7 +264,7 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 	resp.TopBlocked = s.getTopMap(db, `
 		SELECT q_host, COUNT(*) 
 		FROM query_log 
-		WHERE timestamp > ? AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true)
+		WHERE timestamp > ? AND is_filtered = 1
 		GROUP BY q_host 
 		ORDER BY 2 DESC 
 		LIMIT ?`, olderThan)

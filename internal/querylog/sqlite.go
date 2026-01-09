@@ -33,9 +33,17 @@ func initDB(path string) (*sql.DB, error) {
 		upstream TEXT,
 		elapsed_ns INTEGER,
 		response_code TEXT,
-		filtering_result TEXT
+		filtering_result TEXT,
+		
+		-- Generated Columns for Performance
+		is_filtered INTEGER GENERATED ALWAYS AS (json_extract(filtering_result, '$.IsFiltered')) VIRTUAL,
+		reason INTEGER GENERATED ALWAYS AS (json_extract(filtering_result, '$.Reason')) VIRTUAL
 	);
 	CREATE INDEX IF NOT EXISTS idx_timestamp ON query_log (timestamp);
+	
+	-- Composite Indices for GROUP BY optimization
+	CREATE INDEX IF NOT EXISTS idx_is_filtered_host ON query_log(is_filtered, q_host) WHERE is_filtered = 1;
+	CREATE INDEX IF NOT EXISTS idx_timestamp_host ON query_log(timestamp, q_host);
 	`
 
 	_, err = db.Exec(query)
@@ -45,6 +53,17 @@ func initDB(path string) (*sql.DB, error) {
 	}
 
 	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
+
+	// Migration for existing databases: Add generated columns and indices
+	// Ignored errors are expected if columns/indices already exist.
+	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN is_filtered INTEGER GENERATED ALWAYS AS (json_extract(filtering_result, '$.IsFiltered')) VIRTUAL")
+	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN reason INTEGER GENERATED ALWAYS AS (json_extract(filtering_result, '$.Reason')) VIRTUAL")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_is_filtered ON query_log(is_filtered) WHERE is_filtered = 1")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_reason ON query_log(reason)")
+	
+	// Composite Indices Migration
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_is_filtered_host ON query_log(is_filtered, q_host) WHERE is_filtered = 1")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_timestamp_host ON query_log(timestamp, q_host)")
 
 	return db, nil
 }
@@ -204,15 +223,15 @@ func scanLogEntry(rows *sql.Rows) (*logEntry, error) {
 }
 
 var filteringStatusConditions = map[string]string{
-	filteringStatusFiltered:            " AND (json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) OR json_extract(filtering_result, '$.Reason') IN (1, 9, 10, 11))",
-	filteringStatusBlocked:             " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') IN (3, 8)",
-	filteringStatusBlockedService:      " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 8",
-	filteringStatusBlockedSafebrowsing: " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 4",
-	filteringStatusBlockedParental:     " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 5",
-	filteringStatusWhitelisted:         " AND json_extract(filtering_result, '$.Reason') = 1",
-	filteringStatusRewritten:           " AND json_extract(filtering_result, '$.Reason') IN (9, 10, 11)",
-	filteringStatusSafeSearch:          " AND json_extract(filtering_result, '$.IsFiltered') IN (1, 'true', true) AND json_extract(filtering_result, '$.Reason') = 7",
-	filteringStatusProcessed:           " AND json_extract(filtering_result, '$.Reason') NOT IN (3, 8, 1)",
+	filteringStatusFiltered:            " AND (is_filtered = 1 OR reason IN (1, 9, 10, 11))",
+	filteringStatusBlocked:             " AND is_filtered = 1 AND reason IN (3, 8)",
+	filteringStatusBlockedService:      " AND is_filtered = 1 AND reason = 8",
+	filteringStatusBlockedSafebrowsing: " AND is_filtered = 1 AND reason = 4",
+	filteringStatusBlockedParental:     " AND is_filtered = 1 AND reason = 5",
+	filteringStatusWhitelisted:         " AND reason = 1",
+	filteringStatusRewritten:           " AND reason IN (9, 10, 11)",
+	filteringStatusSafeSearch:          " AND is_filtered = 1 AND reason = 7",
+	filteringStatusProcessed:           " AND reason NOT IN (3, 8, 1)",
 }
 
 func (l *queryLog) deleteOld(ctx context.Context, olderThan time.Time) error {

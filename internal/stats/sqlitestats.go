@@ -229,12 +229,6 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 
 	olderThan := time.Now().Add(-limit).UnixNano()
 
-	s.logger.InfoContext(ctx, "DEBUG STATS",
-		"limit_seconds", limit.Seconds(),
-		"olderThan_nano", olderThan,
-		"now_nano", time.Now().UnixNano(),
-	)
-
 	db := s.queryLog.GetSQLDB()
 
 	// 1. Totals
@@ -320,7 +314,6 @@ func (s *sqliteStats) getTopMap(db *sql.DB, query string, olderThan int64) []map
 			res = append(res, map[string]uint64{name: count})
 		}
 	}
-	s.logger.Info("DEBUG TOP MAP", "query", query, "rows_found", count)
 	return res
 }
 

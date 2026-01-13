@@ -147,7 +147,15 @@ func (s *sqliteStats) handleStatsReset(w http.ResponseWriter, r *http.Request) {
 	db := s.queryLog.GetSQLDB()
 	_, err := db.Exec("DELETE FROM query_log")
 	if err != nil {
-		aghhttp.ErrorAndLog(r.Context(), s.logger, r, w, http.StatusInternalServerError, "clearing stats: %s", err)
+		aghhttp.ErrorAndLog(
+			r.Context(),
+			s.logger,
+			r,
+			w,
+			http.StatusInternalServerError,
+			"clearing stats: %s",
+			err,
+		)
 	}
 }
 
@@ -181,13 +189,29 @@ func (s *sqliteStats) handlePutStatsConfig(w http.ResponseWriter, r *http.Reques
 
 	engine, err := aghnet.NewIgnoreEngine(reqData.Ignored, ignoredEnabled)
 	if err != nil {
-		aghhttp.ErrorAndLog(ctx, s.logger, r, w, http.StatusUnprocessableEntity, "ignored: %s", err)
+		aghhttp.ErrorAndLog(
+			ctx,
+			s.logger,
+			r,
+			w,
+			http.StatusUnprocessableEntity,
+			"ignored: %s",
+			err,
+		)
 		return
 	}
 
 	ivl := time.Duration(reqData.Interval) * time.Millisecond
 	if err = validateIvl(ivl); err != nil {
-		aghhttp.ErrorAndLog(ctx, s.logger, r, w, http.StatusUnprocessableEntity, "unsupported interval: %s", err)
+		aghhttp.ErrorAndLog(
+			ctx,
+			s.logger,
+			r,
+			w,
+			http.StatusUnprocessableEntity,
+			"unsupported interval: %s",
+			err,
+		)
 		return
 	}
 
@@ -222,7 +246,7 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 		return resp
 	}
 
-	// FORCE FLUSH BEFORE QUERYING
+	// Force flush before querying.
 	if err := s.queryLog.Flush(ctx); err != nil {
 		s.logger.ErrorContext(ctx, "flushing query log for stats", slogutil.KeyError, err)
 	}
@@ -252,7 +276,11 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 	}
 
 	// 2. Top Queried Domains
-	resp.TopQueried = s.getTopMap(db, `SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? GROUP BY q_host ORDER BY 2 DESC LIMIT ?`, olderThan)
+	resp.TopQueried = s.getTopMap(
+		db,
+		`SELECT q_host, COUNT(*) FROM query_log WHERE timestamp > ? GROUP BY q_host ORDER BY 2 DESC LIMIT ?`,
+		olderThan,
+	)
 
 	// 3. Top Blocked Domains (Corrected IsFiltered check)
 	resp.TopBlocked = s.getTopMap(db, `
@@ -266,7 +294,10 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 	// 4. Top Clients (ID/IP)
 	resp.TopClients = s.getTopMap(db, `
 		SELECT 
-			CASE WHEN client_id IS NOT NULL AND client_id != '' THEN client_id ELSE client_ip END as identifier, 
+			CASE
+				WHEN client_id IS NOT NULL AND client_id != '' THEN client_id
+				ELSE client_ip
+			END as identifier, 
 			COUNT(*) 
 		FROM query_log 
 		WHERE timestamp > ? AND (client_ip != '' OR client_id != '')

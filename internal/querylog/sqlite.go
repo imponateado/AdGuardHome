@@ -145,7 +145,18 @@ func (l *queryLog) flushToSQLite(ctx context.Context) error {
 }
 
 func (l *queryLog) searchSQLite(ctx context.Context, params *searchParams) ([]*logEntry, error) {
-	query := "SELECT timestamp, q_host, q_type, client_id, client_ip, upstream, elapsed_ns, response_code, filtering_result FROM query_log WHERE 1=1"
+	query := `SELECT
+		timestamp,
+		q_host,
+		q_type,
+		client_id,
+		client_ip,
+		upstream,
+		elapsed_ns,
+		response_code,
+		filtering_result
+	FROM query_log
+	WHERE 1=1`
 	var args []interface{}
 
 	if !params.olderThan.IsZero() {
@@ -201,7 +212,17 @@ func scanLogEntry(rows *sql.Rows) (*logEntry, error) {
 	var elapsedNs int64
 	var filteringResultJSON sql.NullString
 
-	err := rows.Scan(&ts, &qHost, &qType, &clientID, &clientIPStr, &upstream, &elapsedNs, &respCode, &filteringResultJSON)
+	err := rows.Scan(
+		&ts,
+		&qHost,
+		&qType,
+		&clientID,
+		&clientIPStr,
+		&upstream,
+		&elapsedNs,
+		&respCode,
+		&filteringResultJSON,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +259,11 @@ var filteringStatusConditions = map[string]string{
 func (l *queryLog) deleteOld(ctx context.Context, olderThan time.Time) error {
 	l.logger.DebugContext(ctx, "deleting old sqlite entries", "older_than", olderThan)
 
-	res, err := l.db.ExecContext(ctx, "DELETE FROM query_log WHERE timestamp < ?", olderThan.UnixNano())
+	res, err := l.db.ExecContext(
+		ctx,
+		"DELETE FROM query_log WHERE timestamp < ?",
+		olderThan.UnixNano(),
+	)
 	if err != nil {
 		return fmt.Errorf("deleting old entries: %w", err)
 	}

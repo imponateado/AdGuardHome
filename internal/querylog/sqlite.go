@@ -52,17 +52,17 @@ func initDB(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("creating table: %w", err)
 	}
 
-	// Updates old query_log table to add new columns if not exist
+	// Update the old query_log table to add new columns if they do not exist.
 	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN filtering_result TEXT")
 
-	// Migration for existing databases: Add generated columns and indices
+	// Migration for existing databases: Add generated columns and indices.
 	// Ignored errors are expected if columns/indices already exist.
 	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN is_filtered INTEGER GENERATED ALWAYS AS (json_extract(filtering_result, '$.IsFiltered')) VIRTUAL")
 	_, _ = db.Exec("ALTER TABLE query_log ADD COLUMN reason INTEGER GENERATED ALWAYS AS (json_extract(filtering_result, '$.Reason')) VIRTUAL")
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_is_filtered ON query_log(is_filtered) WHERE is_filtered = 1")
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_reason ON query_log(reason)")
 
-	// Composite Indices Migration
+	// Composite Indices Migration.
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_is_filtered_host ON query_log(is_filtered, q_host) WHERE is_filtered = 1")
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_timestamp_host ON query_log(timestamp, q_host)")
 

@@ -21,7 +21,7 @@ func TestInitDB(t *testing.T) {
 	var tableName string
 	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='query_log'").Scan(&tableName)
 
-	assert.NoError(t, err, "Tabela query_log should exist")
+	assert.NoError(t, err, "table query_log should exist")
 	assert.Equal(t, "query_log", tableName)
 
 	expectedCols := []string{
@@ -32,6 +32,6 @@ func TestInitDB(t *testing.T) {
 
 	for _, col := range expectedCols {
 		_, err = db.Prepare("SELECT " + col + " FROM query_log")
-		assert.NoError(t, err, "Coluna %s deveria existir e ser selecionável", col)
+		assert.NoError(t, err, "column %s should exist and be selectable", col)
 	}
 }

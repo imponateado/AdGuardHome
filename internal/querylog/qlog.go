@@ -44,7 +44,6 @@ type queryLog struct {
 	// logFile is the path to the log file.
 	logFile string
 
-	//
 	db *sql.DB
 
 	// bufferLock protects buffer.

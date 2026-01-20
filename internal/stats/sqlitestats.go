@@ -294,14 +294,20 @@ func (s *sqliteStats) getStatsData(ctx context.Context, limit time.Duration) *St
 	// 4. Top Clients (ID/IP)
 	resp.TopClients = s.getTopMap(db, `
 		SELECT 
-			CASE
-				WHEN client_id IS NOT NULL AND client_id != '' THEN client_id
-				ELSE client_ip
-			END as identifier, 
-			COUNT(*) 
-		FROM query_log 
-		WHERE timestamp > ? AND (client_ip != '' OR client_id != '')
-		GROUP BY identifier 
+			t.identifier, 
+			SUM(t.cnt) 
+		FROM (
+			SELECT 
+				CASE
+					WHEN MAX(client_id) IS NOT NULL AND MAX(client_id) != '' THEN MAX(client_id)
+					ELSE client_ip
+				END as identifier, 
+				COUNT(*) as cnt
+			FROM query_log 
+			WHERE timestamp > ? AND (client_ip != '' OR client_id != '')
+			GROUP BY client_ip 
+		) as t
+		GROUP BY t.identifier 
 		ORDER BY 2 DESC 
 		LIMIT ?`, olderThan)
 

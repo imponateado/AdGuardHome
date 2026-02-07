@@ -107,7 +107,7 @@ func TestHandleStatsConfig(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPut, configPut, bytes.NewReader(buf))
 			rw := httptest.NewRecorder()
 
-			s.(*StatsCtx).handlePutStatsConfig(rw, req)
+			s.handlePutStatsConfig(rw, req)
 			require.Equal(t, tc.wantCode, rw.Code)
 
 			if tc.wantCode != http.StatusOK {
@@ -119,7 +119,7 @@ func TestHandleStatsConfig(t *testing.T) {
 			resp := httptest.NewRequest(http.MethodGet, configGet, nil)
 			rw = httptest.NewRecorder()
 
-			s.(*StatsCtx).handleGetStatsConfig(rw, resp)
+			s.handleGetStatsConfig(rw, resp)
 			require.Equal(t, http.StatusOK, rw.Code)
 
 			ans := getConfigResp{}

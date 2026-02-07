@@ -38,8 +38,12 @@ func newTestStatsCtx(tb testing.TB, c Config) (s *StatsCtx) {
 	}
 
 	var err error
-	s, err = New(c)
+	var i Interface
+	i, err = New(c)
 	require.NoError(tb, err)
+
+	s, ok := i.(*StatsCtx)
+	require.True(tb, ok)
 
 	return s
 }
@@ -77,7 +81,7 @@ func TestStats_races(t *testing.T) {
 
 		<-waitCh
 
-		_, _ = s.(*StatsCtx).getData(24)
+		_, _ = s.getData(24)
 	}
 
 	const (
@@ -161,7 +165,7 @@ func TestStatsCtx_FillCollectedStats_daily(t *testing.T) {
 	// In this way we will not skip first hours.
 	curID := uint32(daysCount * 24)
 
-	s.(*StatsCtx).fillCollectedStats(data, dailyData, curID)
+	s.fillCollectedStats(data, dailyData, curID)
 
 	assert.Equal(t, timeUnits, data.TimeUnits)
 	assert.Equal(t, sum[RFiltered], data.BlockedFiltering)
@@ -180,12 +184,12 @@ func TestStatsCtx_DataFromUnits_month(t *testing.T) {
 
 	testutil.CleanupAndRequireSuccess(t, s.Close)
 
-	units, curID := s.(*StatsCtx).loadUnits(hoursInMonth)
+	units, curID := s.loadUnits(hoursInMonth)
 	require.Len(t, units, hoursInMonth)
 
 	var h uint32
 	for h = 1; h <= hoursInMonth; h++ {
-		data := s.(*StatsCtx).dataFromUnits(units[:h], curID)
+		data := s.dataFromUnits(units[:h], curID)
 		require.NotNil(t, data)
 	}
 }

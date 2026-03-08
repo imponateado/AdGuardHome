@@ -38,7 +38,7 @@ require (
 	// structures with *time.Time.
 	go.yaml.in/yaml/v4 v4.0.0-rc.3
 	golang.org/x/crypto v0.48.0
-	golang.org/x/exp v0.0.0-20260209203927-2842357ff358
+	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa
 	golang.org/x/net v0.50.0
 	golang.org/x/sys v0.41.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -47,7 +47,7 @@ require (
 
 require (
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
-	modernc.org/sqlite v1.44.1
+	modernc.org/sqlite v1.46.1
 )
 
 require (
@@ -117,7 +117,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
-	modernc.org/libc v1.67.6 // indirect
+	modernc.org/libc v1.69.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	mvdan.cc/editorconfig v0.3.0 // indirect

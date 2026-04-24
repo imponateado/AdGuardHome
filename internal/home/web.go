@@ -262,14 +262,10 @@ func (web *webAPI) start(ctx context.Context) {
 
 	// this loop is used as an ability to change listening host and/or port
 	for !web.httpsServer.inShutdown {
-		printHTTPAddresses(urlutil.SchemeHTTP, web.tlsManager)
+		printHTTPAddresses(ctx, web.logger, urlutil.SchemeHTTP, web.tlsManager)
 		errs := make(chan error, 2)
 
-		// Use an h2c handler to support unencrypted HTTP/2, e.g. for proxies.
-		hdlr := h2c.NewHandler(
-			withMiddlewares(web.conf.mux, limitRequestBody),
-			&http2.Server{},
-		)
+		hdlr := withMiddlewares(web.conf.mux, limitRequestBody)
 
 		logger := web.baseLogger.With(loggerKeyServer, "plain")
 
@@ -277,10 +273,18 @@ func (web *webAPI) start(ctx context.Context) {
 		logMw := httputil.NewLogMiddleware(logger, slog.LevelDebug)
 		hdlr = logMw.Wrap(hdlr)
 
+		hdlr = web.auth.middleware().Wrap(hdlr)
+
+		// Use an h2c handler to support unencrypted HTTP/2, e.g. for proxies.
+		//
+		// NOTE:  The auth middleware must be inside the h2c handler to ensure
+		// it applies to upgraded HTTP/2 connections as well.  See AG-51779.
+		hdlr = h2c.NewHandler(hdlr, &http2.Server{})
+
 		// Create a new instance, because the Web is not usable after Shutdown.
 		web.httpServer = &http.Server{
 			Addr:              web.conf.BindAddr.String(),
-			Handler:           web.auth.middleware().Wrap(hdlr),
+			Handler:           hdlr,
 			ReadTimeout:       web.conf.ReadTimeout,
 			ReadHeaderTimeout: web.conf.ReadHeaderTimeout,
 			WriteTimeout:      web.conf.WriteTimeout,
@@ -377,7 +381,7 @@ func (web *webAPI) serveTLS(ctx context.Context) (next bool) {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelError),
 	}
 
-	printHTTPAddresses(urlutil.SchemeHTTPS, web.tlsManager)
+	printHTTPAddresses(ctx, web.logger, urlutil.SchemeHTTPS, web.tlsManager)
 
 	if web.conf.serveHTTP3 {
 		go web.mustStartHTTP3(ctx, addr)

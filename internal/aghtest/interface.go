@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/agh"
+	"github.com/AdguardTeam/AdGuardHome/internal/aghalg"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghhttp"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghos"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghtls"
@@ -204,10 +205,16 @@ func (m *Registrar) Register(method, path string, h http.HandlerFunc) {
 
 // TLSConfigProvider is a fake [aghtls.TLSConfigProvider] implementation for
 // tests.
-// TODO(m.kazantsev):  Use in tests.
 type TLSConfigProvider struct {
-	OnTLSConfig func() (conf *tls.Config)
-	OnRootCAs   func() (cert *x509.CertPool)
+	OnTLSConfig            func() (conf *tls.Config)
+	OnRootCAs              func() (cert *x509.CertPool)
+	OnHasIPAddrs           func() (ok bool)
+	OnExtendedTLSConfig    func() (conf *aghtls.ExtendedTLSConfig)
+	OnSetExtendedTLSConfig func(
+		ctx context.Context,
+		servePlainDNS aghalg.NullBool,
+		conf *aghtls.ExtendedTLSConfig,
+	) (changed bool, err error)
 }
 
 // type check
@@ -223,4 +230,26 @@ func (t *TLSConfigProvider) TLSConfig() (conf *tls.Config) {
 // *TLSConfigProvider.
 func (t *TLSConfigProvider) RootCAs() (pool *x509.CertPool) {
 	return t.OnRootCAs()
+}
+
+// HasIPAddrs implements the [aghtls.TLSConfigProvider] interface for
+// *TLSConfigProvider.
+func (t *TLSConfigProvider) HasIPAddrs() (ok bool) {
+	return t.OnHasIPAddrs()
+}
+
+// ExtendedTLSConfig implements the [aghtls.TLSConfigProvider] interface for
+// *TLSConfigProvider.
+func (t *TLSConfigProvider) ExtendedTLSConfig() (conf *aghtls.ExtendedTLSConfig) {
+	return t.OnExtendedTLSConfig()
+}
+
+// SetExtendedTLSConfig implements the [aghtls.TLSConfigProvider] interface for
+// *TLSConfigProvider.
+func (t *TLSConfigProvider) SetExtendedTLSConfig(
+	ctx context.Context,
+	servePlainDNS aghalg.NullBool,
+	conf *aghtls.ExtendedTLSConfig,
+) (changed bool, err error) {
+	return t.OnSetExtendedTLSConfig(ctx, servePlainDNS, conf)
 }

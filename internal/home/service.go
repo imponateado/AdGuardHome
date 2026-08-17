@@ -7,12 +7,12 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/AdguardTeam/AdGuardHome/internal/aghnet"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghos"
 	"github.com/AdguardTeam/AdGuardHome/internal/ossvc"
 	"github.com/AdguardTeam/AdGuardHome/internal/version"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
-	"github.com/AdguardTeam/golibs/netutil/urlutil"
 	"github.com/AdguardTeam/golibs/osutil/executil"
 	"github.com/kardianos/service"
 )
@@ -41,15 +41,17 @@ type program struct {
 	baseLogger      *slog.Logger
 	logger          *slog.Logger
 	sigHdlr         *signalHandler
+	hostsContainer  *aghnet.HostsContainer
 	gliNetTokenRoot *os.Root
 	workDir         string
 	confPath        string
+	pidFilePath     string
 }
 
 // type check
 var _ service.Interface = (*program)(nil)
 
-// Start implements service.Interface interface for *program.
+// Start implements [service.Interface] interface for *program.
 func (p *program) Start(_ service.Service) (err error) {
 	// Start should not block.  Do the actual work async.
 	args := p.opts
@@ -65,6 +67,8 @@ func (p *program) Start(_ service.Service) (err error) {
 		p.sigHdlr,
 		p.workDir,
 		p.confPath,
+		p.pidFilePath,
+		p.hostsContainer,
 	)
 
 	return nil
@@ -159,6 +163,8 @@ func handleServiceControlAction(
 	sigHdlr *signalHandler,
 	workDir string,
 	confPath string,
+	pidFilePath string,
+	hc *aghnet.HostsContainer,
 ) (err error) {
 	actionName := opts.serviceControlAction
 	l.InfoContext(ctx, version.Full())
@@ -190,6 +196,8 @@ func handleServiceControlAction(
 			gliNetTokenRoot: gliNetTokenRoot,
 			workDir:         workDir,
 			confPath:        confPath,
+			pidFilePath:     pidFilePath,
+			hostsContainer:  hc,
 		}
 
 		return p.handleRun(ctx, baseLogger, runOpts)
@@ -333,7 +341,7 @@ func handleServiceInstallCmd(
 			"There are a few more things that must be configured before you can use it.\n"+
 			"Click on the link below and follow the Installation Wizard steps to finish setup.\n"+
 			"AdGuard Home is now available at the following addresses:")
-		printHTTPAddresses(ctx, l, urlutil.SchemeHTTP, nil)
+		printHTTPAddresses(ctx, l)
 	}
 
 	return nil

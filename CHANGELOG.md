@@ -7,16 +7,120 @@ The format is based on [*Keep a Changelog*](https://keepachangelog.com/en/1.0.0/
 ## [Unreleased]
 
 <!--
-## [v0.108.0] – TBA
+## [v1.0.0] – TBA
 
-## [v0.107.77] - 2026-06-01 (APPROX.)
+## [v0.107.78] - 2026-06-15 (APPROX.)
 
-See also the [v0.107.77 GitHub milestone][ms-v0.107.77].
+See also the [v0.107.79 GitHub milestone][ms-v0.107.79].
 
-[ms-v0.107.77]: https://github.com/AdguardTeam/AdGuardHome/milestone/112?closed=1
+[ms-v0.107.79]: https://github.com/AdguardTeam/AdGuardHome/milestone/114?closed=1
 
 NOTE: Add new changes BELOW THIS COMMENT.
 -->
+
+### Security
+
+- Go version has been updated to prevent the possibility of exploiting the Go vulnerabilities fixed in [1.26.6][go-1.26.6].
+
+- AdGuard Home is now more resistant to resource exhaustion attacks when using DNS-over-QUIC.
+
+    This is GHSA-w6v6-f44j-3rj2.  We thank @ATinyShoe for reporting this security issue.
+
+### Added
+
+- Bootstrap servers configuration now supports comments.
+
+- New property `"language"` in `POST /control/install/check_config` and `POST /control/install/configure` HTTP APIs.
+
+- The user is able to remove the static lease's hostname via the HTTP API.
+
+### Changed
+
+- The `edge` channel has been switched to the new UI and versioning scheme.
+
+### Deprecated
+
+- `strict_sni_check` is now deprecated.
+
+### Fixed
+
+- DNS64 treating unresolved `CNAME`/`DNAME` answers as the end of resolution chain ([#7514]).
+
+- Blocked requests without an EDNS(0) OPT record ([#8183]).
+
+[go-1.26.6]: https://groups.google.com/g/golang-announce/c/94pEornpRlI
+[#7514]: https://github.com/AdguardTeam/AdGuardHome/issues/7514
+[#8183]: https://github.com/AdguardTeam/AdGuardHome/issues/8183
+
+<!--
+NOTE: Add new changes ABOVE THIS COMMENT.
+-->
+
+## [v0.107.78] - 2026-07-13
+
+See also the [v0.107.78 GitHub milestone][ms-v0.107.78].
+
+### Security
+
+- AdGuard Home is now more resistant to JIGGLE attacks.
+
+    This is GHSA-p5f5-3p5g-rfjw.  We thank @Nora-Qiu for reporting this security issue.
+
+- AdGuard Home now validates responses from DoH upstreams more strictly.
+
+    This is GHSA-4qjf-2hgm-92q6.  We thank @wallace0409 for reporting this security issue.
+
+- QUIC connections are now protected from unbounded reads.
+
+    This is GHSA-qr92-rwvw-mhgh and GHSA-cccx-2r6r-m9r4.  We thank @wallace0409 for reporting this security issue.
+
+- AdGuard Home now validates responses from DNSCrypt upstreams more strictly.
+
+- The H2C connection establishment via HTTP/1.1 request upgrade is no longer supported.  See [RFC 9113][rfc9113].
+
+- Go version has been updated to prevent the possibility of exploiting the Go vulnerabilities fixed in [1.26.5][go-1.26.5].
+
+- The size of rulelists is limited.  This is necessary to prevent a user's machine from becoming overloaded if the filter source misbehaves.
+
+    We thank Damir (@Evelynkaz) for reporting this security issue.
+
+### Added
+
+- Improved updater logging to give users more insight into the problem with version updating ([#8410]).
+
+### Changed
+
+- The interval of filter updates can now be set to any number of hours between `0` and `8760` (365 days) in the configuration file.
+
+#### Configuration changes
+
+- The `filtering` object of the YAML configuration now includes a new property, `max_http_size`, which defines the maximum size of the HTTP request for rulelists. To disable the limitation, set a large size, such as `1 TB`.
+
+- Invalid AA flag in DNS responses ([#7955]).
+
+- The parsing of the `ech` parameter in DNS rewrite rules for the HTTPS record type ([#8276]).
+
+- Validation of the `answer` field in DNS rewrite rules in case it is represented as CNAME.
+
+- Blocked services check on the Custom filtering rules page does not work properly without specifying of a client.
+
+[#7955]:     https://github.com/AdguardTeam/AdGuardHome/issues/7955
+[#8276]:     https://github.com/AdguardTeam/AdGuardHome/issues/8276
+[#8410]:     https://github.com/AdguardTeam/AdGuardHome/issues/8410
+[go-1.26.5]: https://groups.google.com/g/golang-announce/c/OrmQE_Yp5Sc
+[rfc9113]:   https://datatracker.ietf.org/doc/html/rfc9113
+
+[ms-v0.107.78]: https://github.com/AdguardTeam/AdGuardHome/milestone/113?closed=1
+
+## [v0.107.77] - 2026-06-01
+
+See also the [v0.107.77 GitHub milestone][ms-v0.107.77].
+
+### Security
+
+- Authorization in GLiNET mode is no longer vulnerable to path traversal attacks.
+
+    **NOTE:** This is CVE-2026-41448. We thank @djnnvx for reporting this security issue.
 
 ### Added
 
@@ -26,13 +130,17 @@ NOTE: Add new changes BELOW THIS COMMENT.
 
 - Query parameter `response_status` in `GET /control/querylog` is now deprecated.  Use new `reason` query parameter instead.
 
-<!--
-NOTE: Add new changes ABOVE THIS COMMENT.
--->
+[ms-v0.107.77]: https://github.com/AdguardTeam/AdGuardHome/milestone/112?closed=1
 
 ## [v0.107.76] - 2026-05-21
 
 See also the [v0.107.76 GitHub milestone][ms-v0.107.76].
+
+### Security
+
+- QUIC connections now observe timeouts more strictly.
+
+    This is GHSA-73vv-3434-p64c.  We thank @N0zoM1z0 for reporting this security issue.
 
 ### Changed
 
@@ -53,8 +161,6 @@ See also the [v0.107.76 GitHub milestone][ms-v0.107.76].
 See also the [v0.107.75 GitHub milestone][ms-v0.107.75].
 
 ### Security
-
-- Authorization in GLiNET mode is no longer vulnerable to path traversal attacks.
 
 - Go version has been updated to prevent the possibility of exploiting the Go vulnerabilities fixed in [1.26.3][go-1.26.3].
 
@@ -173,7 +279,7 @@ See also the [v0.107.72 GitHub milestone][ms-v0.107.72].
 
 - AdGuard Home now tracks the TLS certificate and key files for updates and reloads them after any updates are detected ([#3962]).
 
-- New query parameter `recent` in `GET /control/stats/` defines statistics lookback period in millieseconds.  See `openapi/openapi.yaml` for details.
+- New query parameter `recent` in `GET /control/stats/` defines statistics lookback period in milliseconds.  See `openapi/openapi.yaml` for details.
 
 - New field `"ignored_enabled"` in `GetStatsConfigResponse` or `GetQueryLogConfigResponse`.  See `openapi/openapi.yaml` for details.
 
@@ -3626,11 +3732,13 @@ See also the [v0.104.2 GitHub milestone][ms-v0.104.2].
 [ms-v0.104.2]: https://github.com/AdguardTeam/AdGuardHome/milestone/28?closed=1
 
 <!--
-[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.77...HEAD
-[v0.107.77]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.76...v0.107.77
+[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.79...HEAD
+[v0.107.79]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.78...v0.107.79
 -->
 
-[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.76...HEAD
+[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.78...HEAD
+[v0.107.78]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.77...v0.107.78
+[v0.107.77]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.76...v0.107.77
 [v0.107.76]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.75...v0.107.76
 [v0.107.75]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.74...v0.107.75
 [v0.107.74]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.73...v0.107.74

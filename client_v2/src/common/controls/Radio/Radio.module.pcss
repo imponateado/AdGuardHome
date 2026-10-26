@@ -7,9 +7,17 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    margin: 0;
-    padding: 8px 0;
+    margin: 0 -16px;
+    padding: 8px 16px;
     cursor: pointer;
+    border-radius: 8px;
+    transition: background-color var(--t2);
+
+    @media (hover: hover) {
+        &:hover:not(:has(input:disabled)) {
+            background-color: var(--page-background-additional-hovered);
+        }
+    }
 
     &.center {
         align-items: center;
@@ -28,7 +36,7 @@
 
         .text {
             max-width: 100%;
-            font-weight: var(--weight-bold);
+            font-weight: var(--weight-semi-bold);
         }
 
         .description {
@@ -46,7 +54,7 @@
         }
 
         @media (min-width: 768px) {
-            padding: 16px 0;
+            padding: 16px 16px;
         }
     }
 }

@@ -14,6 +14,7 @@ type Props = {
     blockedFiltering: number[];
     replacedSafebrowsing: number[];
     replacedParental: number[];
+    timeUnits: string;
 };
 
 export const StatCards = (props: Props) => {
@@ -30,6 +31,7 @@ export const StatCards = (props: Props) => {
                 value={props.numDnsQueries}
                 label={intl.getMessage('dns_query')}
                 data={props.dnsQueries}
+                timeUnits={props.timeUnits}
                 color={CARDS_COLORS.QUERIES}
                 cardTheme={CARDS_THEME.QUERIES}
                 linkTo={RoutePath.QueryLog}
@@ -38,31 +40,43 @@ export const StatCards = (props: Props) => {
                 value={props.numBlockedFiltering}
                 label={intl.getMessage('ads_blocked_card')}
                 data={props.blockedFiltering}
+                timeUnits={props.timeUnits}
                 color={CARDS_COLORS.ADS}
                 percentValue={blockedPercent()}
                 cardTheme={CARDS_THEME.ADS}
                 linkTo={RoutePath.QueryLog}
-                query={{ status: QUERY_LOG_STATUS_FILTER.BLOCKED.QUERY }}
+                query={{
+                    status: QUERY_LOG_STATUS_FILTER.BLOCKED.QUERY,
+                    reason: QUERY_LOG_REASON_FILTER.BLOCKED_BY_FILTER.QUERY,
+                }}
             />
             <StatCard
                 value={props.numReplacedSafebrowsing}
                 label={intl.getMessage('blocked_threats_chart')}
                 data={props.replacedSafebrowsing}
+                timeUnits={props.timeUnits}
                 color={CARDS_COLORS.THREATS}
                 percentValue={threatsPercent()}
                 cardTheme={CARDS_THEME.THREATS}
                 linkTo={RoutePath.QueryLog}
-                query={{ reason: QUERY_LOG_REASON_FILTER.BLOCKED_BY_THREATS.QUERY }}
+                query={{
+                    status: QUERY_LOG_STATUS_FILTER.BLOCKED.QUERY,
+                    reason: QUERY_LOG_REASON_FILTER.BLOCKED_BY_THREATS.QUERY,
+                }}
             />
             <StatCard
                 value={props.numReplacedParental}
                 label={intl.getMessage('stats_adult')}
                 data={props.replacedParental}
+                timeUnits={props.timeUnits}
                 color={CARDS_COLORS.ADULT}
                 percentValue={parentalPercent()}
                 cardTheme={CARDS_THEME.ADULT}
                 linkTo={RoutePath.QueryLog}
-                query={{ reason: QUERY_LOG_REASON_FILTER.BLOCKED_BY_PARENTAL_CONTROL.QUERY }}
+                query={{
+                    status: QUERY_LOG_STATUS_FILTER.BLOCKED.QUERY,
+                    reason: QUERY_LOG_REASON_FILTER.BLOCKED_BY_PARENTAL_CONTROL.QUERY,
+                }}
             />
         </div>
     );

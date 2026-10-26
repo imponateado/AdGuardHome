@@ -6,6 +6,7 @@ import {
     getFilteringStatus,
     filteringState,
 } from 'panel/stores/filtering';
+import { resetStore } from 'panel/__tests__/helpers/resetStore';
 
 const mocks = vi.hoisted(() => ({
     apiSetRules: vi.fn(() => Promise.resolve(undefined)),
@@ -58,6 +59,24 @@ describe('getFilteringStatus', () => {
             name: 'n',
             rulesCount: 9,
         });
+    });
+
+    it('marks filtersInitialized after a successful request', async () => {
+        resetStore(filteringState, { filtersInitialized: false });
+
+        await getFilteringStatus();
+
+        expect(filteringState.filtersInitialized).toBe(true);
+    });
+
+    it('marks filtersInitialized after a failed request so the loader cannot get stuck', async () => {
+        resetStore(filteringState, { filtersInitialized: false });
+        mocks.apiGetFilteringStatus.mockRejectedValue(new Error('network'));
+
+        await getFilteringStatus();
+
+        expect(filteringState.filtersInitialized).toBe(true);
+        expect(mocks.addErrorToast).toHaveBeenCalled();
     });
 });
 

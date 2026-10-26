@@ -4,24 +4,33 @@ const mocks = vi.hoisted(() => ({
     checkActiveDhcp: vi.fn(),
     dhcpInterfaces: vi.fn(),
     dhcpStatus: vi.fn(),
+    status: vi.fn(),
     dhcpSetConfig: vi.fn(),
     addErrorToast: vi.fn(),
     addSuccessToast: vi.fn(),
 }));
 
 vi.mock('panel/api/generated', () => ({
-        checkActiveDhcp: mocks.checkActiveDhcp,
-        dhcpInterfaces: mocks.dhcpInterfaces,
-        dhcpStatus: mocks.dhcpStatus,
-        status: vi.fn(),
-        dhcpSetConfig: mocks.dhcpSetConfig,
+    checkActiveDhcp: mocks.checkActiveDhcp,
+    dhcpInterfaces: mocks.dhcpInterfaces,
+    dhcpStatus: mocks.dhcpStatus,
+    status: mocks.status,
+    dhcpSetConfig: mocks.dhcpSetConfig,
 }));
 vi.mock('panel/stores/toasts', () => ({
     addErrorToast: mocks.addErrorToast,
     addSuccessToast: mocks.addSuccessToast,
 }));
 
-import { findActiveDhcp, getDhcpInterfaces, setDhcpConfig, toggleDhcp } from 'panel/stores/dhcp';
+import {
+    dhcpState,
+    findActiveDhcp,
+    getDhcpInterfaces,
+    getDhcpStatus,
+    setDhcpConfig,
+    toggleDhcp,
+} from 'panel/stores/dhcp';
+import { resetStore } from 'panel/__tests__/helpers/resetStore';
 
 describe('findActiveDhcp', () => {
     beforeEach(() => vi.clearAllMocks());
@@ -50,6 +59,7 @@ describe('findActiveDhcp', () => {
         await findActiveDhcp('eth0');
         expect(mocks.addErrorToast).toHaveBeenCalledWith(
             expect.objectContaining({
+                noIcon: true,
                 action: expect.objectContaining({ text: expect.any(String) }),
             }),
         );
@@ -104,5 +114,62 @@ describe('toggleDhcp', () => {
         expect(mocks.dhcpSetConfig).toHaveBeenCalledWith(
             expect.objectContaining({ enabled: true }),
         );
+    });
+});
+
+describe('getDhcpStatus — statusInitialized flag', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetStore(dhcpState, { statusInitialized: false });
+    });
+
+    it('marks statusInitialized when DHCP is available', async () => {
+        mocks.status.mockResolvedValue({ dhcp_available: true });
+        mocks.dhcpStatus.mockResolvedValue({ leases: [], static_leases: [] });
+
+        await getDhcpStatus();
+
+        expect(dhcpState.statusInitialized).toBe(true);
+    });
+
+    it('marks statusInitialized when DHCP is unavailable', async () => {
+        mocks.status.mockResolvedValue({ dhcp_available: false });
+
+        await getDhcpStatus();
+
+        expect(dhcpState.statusInitialized).toBe(true);
+    });
+
+    it('marks statusInitialized after a failed request so the loader cannot get stuck', async () => {
+        mocks.status.mockRejectedValue(new Error('network'));
+
+        await getDhcpStatus();
+
+        expect(dhcpState.statusInitialized).toBe(true);
+        expect(mocks.addErrorToast).toHaveBeenCalled();
+    });
+});
+
+describe('getDhcpInterfaces — interfacesInitialized flag', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        resetStore(dhcpState, { interfacesInitialized: false });
+    });
+
+    it('marks interfacesInitialized after a successful request', async () => {
+        mocks.dhcpInterfaces.mockResolvedValue({});
+
+        await getDhcpInterfaces();
+
+        expect(dhcpState.interfacesInitialized).toBe(true);
+    });
+
+    it('marks interfacesInitialized after a failed request so the loader cannot get stuck', async () => {
+        mocks.dhcpInterfaces.mockRejectedValue(new Error('network'));
+
+        await getDhcpInterfaces();
+
+        expect(dhcpState.interfacesInitialized).toBe(true);
+        expect(mocks.addErrorToast).toHaveBeenCalled();
     });
 });

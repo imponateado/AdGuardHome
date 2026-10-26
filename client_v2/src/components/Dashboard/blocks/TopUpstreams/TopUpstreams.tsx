@@ -1,14 +1,14 @@
 import { Show, For, createMemo } from 'solid-js';
-
-import { useIsDesktop } from 'panel/helpers/useMediaQuery';
-import { MOBILE_TABLE_MAX_ROWS } from 'panel/helpers/constants';
 import intl from 'panel/common/intl';
-import { formatNumber, formatCompactNumber } from 'panel/helpers/helpers';
+import { formatCompactNumber } from 'panel/helpers/helpers';
 import theme from 'panel/lib/theme';
-import { Tooltip } from 'panel/common/ui/Tooltip';
+import { QueriesTooltip } from 'panel/common/ui/QueriesTooltip';
+import { TruncatedText } from 'panel/common/ui/TruncatedText';
+import { RoutePath } from 'panel/components/Routes/Paths';
 import cn from 'clsx';
-import { SortableTableHeader } from '../SortableTableHeader';
+import { TableHeader } from '../TableHeader';
 import { EmptyState } from '../EmptyState';
+import { CardFooter } from '../CardFooter';
 import { useSortedData } from '../../hooks/useSortedData';
 
 import s from '../TableCard.module.pcss';
@@ -21,18 +21,12 @@ type UpstreamInfo = {
 type Props = {
     topUpstreamsResponses: UpstreamInfo[];
     numDnsQueries: number;
+    period?: number;
 };
 
 export const TopUpstreams = (props: Props) => {
-    const isDesktop = useIsDesktop();
-    const {
-        sortedData: sortedUpstreams,
-        sortField,
-        sortDirection,
-        handleSort,
-    } = useSortedData(() => props.topUpstreamsResponses);
-    const visibleUpstreams = createMemo(() =>
-        isDesktop() ? sortedUpstreams() : sortedUpstreams().slice(0, MOBILE_TABLE_MAX_ROWS),
+    const { sortedData: sortedUpstreams, hasMore } = useSortedData(
+        () => props.topUpstreamsResponses,
     );
 
     const hasStats = createMemo(() => props.topUpstreamsResponses.length > 0);
@@ -46,18 +40,15 @@ export const TopUpstreams = (props: Props) => {
             </div>
 
             <Show when={hasStats()}>
-                <SortableTableHeader
+                <TableHeader
                     nameLabel={intl.getMessage('upstream')}
                     countLabel={intl.getMessage('queries')}
-                    sortField={sortField()}
-                    sortDirection={sortDirection()}
-                    onSort={handleSort}
                 />
             </Show>
 
             <div class={s.tableRows}>
                 <Show when={hasStats()} fallback={<EmptyState />}>
-                    <For each={visibleUpstreams()}>
+                    <For each={sortedUpstreams()}>
                         {(upstream) => {
                             const percent = createMemo(() =>
                                 props.numDnsQueries > 0
@@ -74,22 +65,16 @@ export const TopUpstreams = (props: Props) => {
                                             s.tableRowLeft,
                                         )}
                                     >
-                                        <span class={s.domainName}>{upstream.name}</span>
+                                        <TruncatedText
+                                            text={upstream.name}
+                                            testId="top-upstream-name"
+                                            class={s.domainName}
+                                        />
                                     </div>
 
                                     <div class={s.tableRowRight}>
                                         <div class={s.dropdowWrapper}>
-                                            <Tooltip
-                                                position="top"
-                                                overlayClass={s.queryTooltipOverlay}
-                                                content={
-                                                    <div class={s.queryTooltip}>
-                                                        {intl.getMessage('queries_tooltip', {
-                                                            value: formatNumber(upstream.count),
-                                                        })}
-                                                    </div>
-                                                }
-                                            >
+                                            <QueriesTooltip count={upstream.count}>
                                                 <div
                                                     class={cn(
                                                         theme.text.t3,
@@ -109,7 +94,7 @@ export const TopUpstreams = (props: Props) => {
                                                         ({percent().toFixed(2)}%)
                                                     </div>
                                                 </div>
-                                            </Tooltip>
+                                            </QueriesTooltip>
                                         </div>
 
                                         <div class={s.queryBar}>
@@ -132,6 +117,14 @@ export const TopUpstreams = (props: Props) => {
                     </For>
                 </Show>
             </div>
+
+            <Show when={hasMore()}>
+                <CardFooter
+                    to={RoutePath.TopUpstreams}
+                    testId="show-more-top-upstreams"
+                    query={props.period ? { period: props.period } : undefined}
+                />
+            </Show>
         </div>
     );
 };

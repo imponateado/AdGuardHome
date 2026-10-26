@@ -10,7 +10,12 @@
 }
 
 .input {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .label {
@@ -27,9 +32,10 @@
     background-color: var(--fills-switch-off-default);
     transition: background-color var(--t2);
 
-    &:hover,
-    &:focus {
-        background-color: var(--fills-switch-off-hovered);
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--fills-switch-off-hovered);
+        }
     }
 
     &:before {
@@ -47,12 +53,17 @@
     }
 }
 
+.input:focus-visible + .handler {
+    background-color: var(--fills-switch-off-hovered);
+}
+
 .input:checked + .handler {
     background-color: var(--fills-switch-on-default);
 
-    &:hover,
-    &:focus {
-        background-color: var(--fills-switch-on-hovered);
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--fills-switch-on-hovered);
+        }
     }
 
     &:before {
@@ -60,13 +71,18 @@
     }
 }
 
+.input:focus-visible:checked + .handler {
+    background-color: var(--fills-switch-on-hovered);
+}
+
 .input:disabled + .handler {
     cursor: default;
     background-color: var(--fills-switch-off-disabled);
 
-    &:hover,
-    &:focus {
-        background-color: var(--fills-switch-off-disabled);
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--fills-switch-off-disabled);
+        }
     }
 
     &:before {
@@ -77,9 +93,10 @@
 .input:checked:disabled + .handler {
     background-color: var(--fills-switch-on-disabled);
 
-    &:hover,
-    &:focus {
-        background-color: var(--fills-switch-on-disabled);
+    @media (hover: hover) {
+        &:hover {
+            background-color: var(--fills-switch-on-disabled);
+        }
     }
 
     &:before {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/aghnet"
+	"github.com/AdguardTeam/AdGuardHome/internal/configmgr"
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
 	"github.com/AdguardTeam/golibs/container"
 	"github.com/AdguardTeam/golibs/errors"
@@ -149,11 +150,21 @@ func validateIvl(ivl time.Duration) (err error) {
 }
 
 // WriteDiskConfig implements the [QueryLog] interface for *queryLog.
-func (l *queryLog) WriteDiskConfig(c *Config) {
+func (l *queryLog) WriteDiskConfig(dc *configmgr.QueryLogConfig, dnsConf *configmgr.DNSConfig) {
 	l.confMu.RLock()
 	defer l.confMu.RUnlock()
 
-	*c = *l.conf
+	c := l.conf
+
+	dc.Ignored = c.Ignored.Values()
+	dc.Interval = timeutil.Duration(c.RotationIvl)
+	dc.MemSize = c.MemSize
+	dc.Enabled = c.Enabled
+	dc.FileEnabled = c.FileEnabled
+	dc.IgnoredEnabled = c.Ignored.IsEnabled()
+	dc.StorageType = c.StorageType
+
+	dnsConf.AnonymizeClientIP = c.AnonymizeClientIP
 }
 
 // Clear memory buffer and remove log files

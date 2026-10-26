@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"net"
 	"net/netip"
 	"testing"
@@ -76,21 +77,19 @@ func TestServer_ProcessInitial(t *testing.T) {
 			t.Parallel()
 
 			c := ServerConfig{
-				TLSConf: &TLSConfig{},
-				Config: Config{
-					AAAADisabled:     tc.aaaaDisabled,
-					UpstreamMode:     UpstreamModeLoadBalance,
-					EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
-					ClientsContainer: EmptyClientsContainer{},
-				},
-				ServePlainDNS: true,
+				TLSConf:          &TLSConfig{},
+				AAAADisabled:     tc.aaaaDisabled,
+				UpstreamMode:     proxy.UpstreamModeLoadBalance,
+				EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
+				ClientsContainer: EmptyClientsContainer{},
+				ServePlainDNS:    true,
 			}
 
 			s := createTestServer(
 				t,
 				&filtering.Config{BlockingMode: filtering.BlockingModeDefault},
 				c,
-				testTLSConfigProvider,
+				testTLSManager,
 			)
 
 			var gotAddr netip.Addr
@@ -180,21 +179,19 @@ func TestServer_ProcessFilteringAfterResponse(t *testing.T) {
 			t.Parallel()
 
 			c := ServerConfig{
-				TLSConf: &TLSConfig{},
-				Config: Config{
-					AAAADisabled:     tc.aaaaDisabled,
-					UpstreamMode:     UpstreamModeLoadBalance,
-					EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
-					ClientsContainer: EmptyClientsContainer{},
-				},
-				ServePlainDNS: true,
+				TLSConf:          &TLSConfig{},
+				AAAADisabled:     tc.aaaaDisabled,
+				UpstreamMode:     proxy.UpstreamModeLoadBalance,
+				EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
+				ClientsContainer: EmptyClientsContainer{},
+				ServePlainDNS:    true,
 			}
 
 			s := createTestServer(
 				t,
 				&filtering.Config{BlockingMode: filtering.BlockingModeDefault},
 				c,
-				testTLSConfigProvider,
+				testTLSManager,
 			)
 
 			resp := newResp(dns.RcodeSuccess, tc.req, tc.respAns)
@@ -328,9 +325,10 @@ func TestServer_ProcessDDRQuery(t *testing.T) {
 
 	tlsConf, _, _ := createServerTLSConfig(t)
 
-	tlsConfProvider := &aghtest.TLSConfigProvider{}
-	tlsConfProvider.OnTLSConfig = func() (conf *tls.Config) { return tlsConf }
-	tlsConfProvider.OnHasIPAddrs = func() (ok bool) { return true }
+	tlsManager := &aghtest.Manager{}
+	tlsManager.OnTLSConfig = func() (conf *tls.Config) { return tlsConf }
+	tlsManager.OnHasIPAddrs = func() (ok bool) { return true }
+	tlsManager.OnRootCAs = func() (cert *x509.CertPool) { return tlsConf.RootCAs }
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -340,12 +338,10 @@ func TestServer_ProcessDDRQuery(t *testing.T) {
 					BlockingMode: filtering.BlockingModeDefault,
 				},
 				ServerConfig{
-					Config: Config{
-						HandleDDR:        tc.ddrEnabled,
-						UpstreamMode:     UpstreamModeLoadBalance,
-						EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
-						ClientsContainer: EmptyClientsContainer{},
-					},
+					HandleDDR:        tc.ddrEnabled,
+					UpstreamMode:     proxy.UpstreamModeLoadBalance,
+					EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
+					ClientsContainer: EmptyClientsContainer{},
 					TLSConf: &TLSConfig{
 						ServerName:       ddrTestDomainName,
 						TLSListenAddrs:   tc.addrsDoT,
@@ -354,7 +350,7 @@ func TestServer_ProcessDDRQuery(t *testing.T) {
 					},
 					ServePlainDNS: true,
 				},
-				tlsConfProvider,
+				tlsManager,
 			)
 
 			req := createTestMessageWithType(tc.host, tc.qtype)
@@ -456,9 +452,7 @@ func TestServer_ProcessDHCPHosts_localRestriction(t *testing.T) {
 			}
 
 			req := &dns.Msg{
-				MsgHdr: dns.MsgHdr{
-					Id: dns.Id(),
-				},
+				Id: dns.Id(),
 				Question: []dns.Question{{
 					Name:   dns.Fqdn(tc.host),
 					Qtype:  dns.TypeA,
@@ -680,19 +674,17 @@ func TestServer_ProcessUpstream_localPTR(t *testing.T) {
 				BlockingMode: filtering.BlockingModeDefault,
 			},
 			ServerConfig{
-				UDPListenAddrs: []*net.UDPAddr{{}},
-				TCPListenAddrs: []*net.TCPAddr{{}},
-				TLSConf:        &TLSConfig{},
-				Config: Config{
-					UpstreamMode:     UpstreamModeLoadBalance,
-					EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
-					ClientsContainer: EmptyClientsContainer{},
-				},
+				UDPListenAddrs:    []*net.UDPAddr{{}},
+				TCPListenAddrs:    []*net.TCPAddr{{}},
+				TLSConf:           &TLSConfig{},
+				UpstreamMode:      proxy.UpstreamModeLoadBalance,
+				EDNSClientSubnet:  &EDNSClientSubnet{Enabled: false},
+				ClientsContainer:  EmptyClientsContainer{},
 				UsePrivateRDNS:    true,
 				LocalPTRResolvers: []string{localUpsAddr},
 				ServePlainDNS:     true,
 			},
-			testTLSConfigProvider,
+			testTLSManager,
 		)
 		ctx := testutil.ContextWithTimeout(t, testTimeout)
 		pctx := newPrxCtx()
@@ -711,19 +703,17 @@ func TestServer_ProcessUpstream_localPTR(t *testing.T) {
 				BlockingMode: filtering.BlockingModeDefault,
 			},
 			ServerConfig{
-				UDPListenAddrs: []*net.UDPAddr{{}},
-				TCPListenAddrs: []*net.TCPAddr{{}},
-				TLSConf:        &TLSConfig{},
-				Config: Config{
-					UpstreamMode:     UpstreamModeLoadBalance,
-					EDNSClientSubnet: &EDNSClientSubnet{Enabled: false},
-					ClientsContainer: EmptyClientsContainer{},
-				},
+				UDPListenAddrs:    []*net.UDPAddr{{}},
+				TCPListenAddrs:    []*net.TCPAddr{{}},
+				TLSConf:           &TLSConfig{},
+				UpstreamMode:      proxy.UpstreamModeLoadBalance,
+				EDNSClientSubnet:  &EDNSClientSubnet{Enabled: false},
+				ClientsContainer:  EmptyClientsContainer{},
 				UsePrivateRDNS:    false,
 				LocalPTRResolvers: []string{localUpsAddr},
 				ServePlainDNS:     true,
 			},
-			testTLSConfigProvider,
+			testTLSManager,
 		)
 		pctx := newPrxCtx()
 

@@ -124,7 +124,9 @@ export const Menu = (props: Props) => {
                         to={RoutePath.Logs}
                     >
                         <Icon class={s.linkIcon} icon="log" />
-                        <span class={theme.common.textOverflow}>{intl.getMessage('logs')}</span>
+                        <span class={theme.common.textOverflow}>
+                            {intl.getMessage('query_log')}
+                        </span>
                     </Link>
                 </div>
                 <div class={cn(s.menuLinkWrapper)}>
@@ -143,8 +145,7 @@ export const Menu = (props: Props) => {
                 <div class={cn(s.menuLinkWrapper)}>
                     <a
                         href={getLogoutUrl()}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        rel="external"
                         class={s.menuLink}
                         id="sign_out"
                     >

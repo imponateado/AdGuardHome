@@ -5,14 +5,19 @@ import {
     blockedServicesAll,
     blockedServicesScheduleUpdate,
 } from 'panel/api/generated';
-import { addErrorToast } from './toasts';
+import { addErrorToast, addSuccessToast, createUndoToast } from './toasts';
+import intl from 'panel/common/intl';
 import type { BlockedServicesSchedule } from 'panel/api/model/blockedServicesSchedule';
 import type { BlockedService } from 'panel/api/model/blockedService';
 import type { ServiceGroup } from 'panel/api/model/serviceGroup';
 
 type ServicesState = {
     processing: boolean;
+    /** Whether the blocked-services schedule request has settled at least once. */
+    initialized: boolean;
     processingAll: boolean;
+    /** Whether the all-blocked-services request has settled at least once. */
+    allInitialized: boolean;
     processingSet: boolean;
     list: BlockedServicesSchedule;
     allServices: BlockedService[];
@@ -21,7 +26,9 @@ type ServicesState = {
 
 const initialState: ServicesState = {
     processing: true,
+    initialized: false,
     processingAll: true,
+    allInitialized: false,
     processingSet: false,
     list: {},
     allServices: [],
@@ -34,10 +41,10 @@ export const getBlockedServices = async () => {
     setState('processing', true);
     try {
         const data = await blockedServicesSchedule();
-        setState({ list: data, processing: false });
+        setState({ list: data, processing: false, initialized: true });
     } catch (error) {
         addErrorToast({ error });
-        setState('processing', false);
+        setState({ processing: false, initialized: true });
     }
 };
 
@@ -49,37 +56,58 @@ export const getAllBlockedServices = async () => {
             allServices: data.blocked_services || [],
             allGroups: data.groups || [],
             processingAll: false,
+            allInitialized: true,
         });
     } catch (error) {
         addErrorToast({ error });
-        setState('processingAll', false);
+        setState({ processingAll: false, allInitialized: true });
     }
 };
 
-export const updateBlockedServices = async (values: BlockedServicesSchedule) => {
+export const updateBlockedServices = async (
+    values: BlockedServicesSchedule,
+): Promise<boolean> => {
     setState('processingSet', true);
     try {
         await blockedServicesScheduleUpdate(values);
         setState('processingSet', false);
         await getBlockedServices();
+        return true;
     } catch (error) {
         addErrorToast({ error });
         setState('processingSet', false);
+        return false;
     }
 };
 
-export const allowBlockedService = async (serviceId: string) => {
+export const allowBlockedService = async (serviceId: string): Promise<boolean> => {
     let list = untrack(() => state.list);
     if (!Array.isArray(list?.ids)) {
         await getBlockedServices();
         list = untrack(() => state.list);
     }
     const currentIds = Array.isArray(list?.ids) ? list.ids : [];
-    if (!currentIds.includes(serviceId)) return;
-    await updateBlockedServices({
+    if (!currentIds.includes(serviceId)) return true;
+    const serviceName =
+        state.allServices.find((s) => s.id === serviceId)?.name || serviceId;
+    const didUpdate = await updateBlockedServices({
         ids: currentIds.filter((id: string) => id !== serviceId),
         schedule: list?.schedule,
     });
+    if (!didUpdate) return false;
+    addSuccessToast(
+        createUndoToast(
+            intl.getMessage('user_rules_service_allowed', { value: serviceName }),
+            intl.getMessage('notify_undo'),
+            async () => {
+                await updateBlockedServices({
+                    ids: [...currentIds, serviceId],
+                    schedule: list?.schedule,
+                });
+            },
+        ),
+    );
+    return true;
 };
 
 export const servicesState = untrack(() => state);

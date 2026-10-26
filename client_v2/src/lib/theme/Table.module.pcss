@@ -42,9 +42,6 @@
     }
 }
 
-/* For text-only cells that need 2-line truncation on mobile.
-   Separate from .cellValue because line-clamp requires
-   display: -webkit-box, which conflicts with display: flex. */
 .cellValueClamped {
     min-width: 0;
     flex: 1;
@@ -66,36 +63,29 @@
     }
 }
 
-/* For plain-text cells. On mobile the value stays on the label line while it
-   fits; when it is too long it drops to the next line as a single truncated
-   line instead of wrapping into many lines next to the label. */
 .cellValueText {
     min-width: 0;
-    flex: 1;
+    flex: 0 1 auto;
+    max-width: 100%;
     display: flex;
     align-items: flex-start;
-    justify-content: flex-end;
-    text-align: right;
+    justify-content: flex-start;
+    text-align: left;
     color: var(--default-description-text);
     overflow: hidden;
-    font-size: var(--fs-text-t3);
-    line-height: var(--lh-t3-normal);
-
-    @media (max-width: 767px) {
-        flex: 0 1 min-content;
-        min-width: 0;
-        max-width: 100%;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        justify-content: flex-start;
-        text-align: left;
-    }
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: var(--fs-text-t2);
+    line-height: var(--lh-t2-normal);
 
     @media (min-width: 768px) {
+        flex: 1;
+        align-items: center;
         text-align: left;
         justify-content: flex-start;
-        align-items: center;
         color: var(--default-main-text);
+        font-size: var(--fs-text-t3);
+        line-height: var(--lh-t3-normal);
     }
 }
 
@@ -119,8 +109,7 @@
 }
 
 .action {
-    width: 100%;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
     border: 0;
@@ -138,20 +127,16 @@
     }
 
     @media (min-width: 768px) {
+        display: flex;
         width: 24px;
         height: 24px;
         min-height: unset;
         justify-content: center;
         gap: 0;
-    }
 
-    &:hover,
-    &:focus {
-        background-color: var(--hovered-page-background);
-    }
-
-    &:active {
-        background-color: var(--pressed-page-background);
+        &:active {
+            background-color: var(--pressed-page-background);
+        }
     }
 }
 
@@ -160,10 +145,15 @@
 }
 
 .actionLabel {
-    font-size: 14px;
+    font-size: var(--fs-text-t2);
     line-height: 1.4;
 
     @media (min-width: 768px) {
         display: none;
     }
+}
+
+.mobileCard {
+    background-color: var(--default-cards-background);
+    box-shadow: var(--default-cards-box-shadow);
 }

@@ -72,6 +72,31 @@
         [data-scope='select'][data-part='control'],
         [data-scope='combobox'][data-part='control'] {
             border: 0;
+            transition: background-color var(--t2);
+
+            &:not([data-disabled]) {
+                &:has(:focus-visible) {
+                    background-color: var(--hovered-secondary-button);
+                }
+
+                @media (hover: hover) {
+                    &:hover {
+                        background-color: var(--hovered-secondary-button);
+                    }
+                }
+
+                &:active {
+                    background-color: var(--pressed-secondary-button);
+                }
+            }
+        }
+
+        [data-scope='select'][data-part='trigger'] {
+            padding-left: 8px;
+        }
+
+        [data-scope='select'][data-part='indicator'] {
+            padding-right: 0;
         }
     }
 
@@ -85,6 +110,14 @@
         [data-scope='select'][data-part='value-text'],
         [data-scope='combobox'][data-part='value-text'] {
             width: 100%;
+        }
+    }
+
+    &.solid-select--height-extra-small {
+        [data-scope='select'][data-part='control'],
+        [data-scope='combobox'][data-part='control'] {
+            min-height: 32px;
+            font-size: 16px;
         }
     }
 
@@ -157,12 +190,19 @@
     [data-scope='select'][data-part='content'],
     [data-scope='combobox'][data-part='content'] {
         color: var(--default-main-text);
-        padding: 8px 0;
+        padding: 0;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: var(--available-height, none);
         box-shadow: 8px 8px 24px 0 rgba(0, 0, 0, 0.1);
         background-color: var(--default-dropdown-menu-background);
         z-index: 3;
         border-radius: 8px;
+
+        &[hidden] {
+            display: none;
+        }
 
         @media (min-width: 1024px) {
             left: initial;
@@ -184,14 +224,21 @@
         border: 1px solid var(--default-item-divider);
         box-shadow: none;
         border-radius: 8px;
-        transition: border var(--t2);
+        transition:
+            border var(--t2),
+            background-color var(--t2);
         cursor: pointer;
         font-size: 16px;
         background-color: var(--default-page-background);
         display: flex;
         align-items: stretch;
 
-        &:hover,
+        @media (hover: hover) {
+            &:hover {
+                background-color: var(--default-input-background);
+            }
+        }
+
         &:focus-within {
             border-color: var(--hovered-main-button);
         }
@@ -208,6 +255,37 @@
             [data-scope='select'][data-part='value-text'],
             [data-scope='combobox'][data-part='value-text'] {
                 color: var(--default-description-text);
+            }
+        }
+    }
+
+    &.solid-select--on-card {
+        [data-scope='select'][data-part='control'],
+        [data-scope='combobox'][data-part='control'] {
+            background-color: var(--page-background-additional);
+
+            @media (hover: hover) {
+                &:not([data-disabled]):hover {
+                    background-color: var(--page-background-additional-hovered);
+                }
+            }
+        }
+    }
+
+    &.solid-select--menu-on-card {
+        [data-scope='select'][data-part='content'],
+        [data-scope='combobox'][data-part='content'] {
+            background-color: var(--default-page-background);
+        }
+
+        [data-scope='select'][data-part='item'],
+        [data-scope='combobox'][data-part='item'] {
+            &[data-highlighted] {
+                background-color: var(--hovered-page-background);
+            }
+
+            &[data-state='checked'] {
+                background-color: var(--pressed-page-background);
             }
         }
     }
@@ -378,6 +456,8 @@
         overflow-y: auto;
         overflow-x: hidden;
         max-height: 340px;
+        flex: 0 1 auto;
+        min-height: 0;
 
         &::-webkit-scrollbar {
             width: 6px;

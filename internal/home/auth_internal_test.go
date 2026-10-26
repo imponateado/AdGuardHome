@@ -1,7 +1,6 @@
 package home
 
 import (
-	"net/http"
 	"path/filepath"
 	"testing"
 
@@ -26,12 +25,11 @@ func TestAuth_UsersList(t *testing.T) {
 	user := webUser{
 		Name:         userName,
 		PasswordHash: string(passwordHash),
-		UserID:       aghuser.MustNewUserID(),
+		UserID:       aghuser.NewUserID(),
 	}
 
 	auth, err := newAuth(testutil.ContextWithTimeout(t, testTimeout), &authConfig{
 		baseLogger:     testLogger,
-		mux:            http.NewServeMux(),
 		rateLimiter:    emptyRateLimiter{},
 		trustedProxies: testTrustedProxies,
 		dbFilename:     sessionsDB,

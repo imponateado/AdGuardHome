@@ -1,18 +1,17 @@
-import { Show, For } from 'solid-js';
+import { Show, For, createSignal } from 'solid-js';
 import cn from 'clsx';
 
 import intl from 'panel/common/intl';
-import { Button } from 'panel/common/ui/Button';
 import { Dialog } from 'panel/common/ui/Dialog';
 import theme from 'panel/lib/theme';
+import { useScrollEdges } from 'panel/hooks/useScrollEdges';
 
 import {
-    checkBlockedService,
+    captitalizeWords,
     formatElapsedMs,
     getServiceName,
     type Filter,
 } from 'panel/helpers/helpers';
-import { FILTERED_STATUS } from 'panel/helpers/constants';
 import {
     getQueryReasonDetails,
     getQueryReasonLabel,
@@ -21,13 +20,14 @@ import {
     getQueryStatusKey,
     getStatusClassName,
     getProtocolName,
-    isBlockedReason,
     formatLogTimeDetailed,
     formatLogDate,
 } from '../../helpers';
 import type { NormalizedQueryLogItem } from 'panel/helpers/helpers';
 import { Service } from '../../types';
+import type { RewriteEntry } from 'panel/api/model/rewriteEntry';
 
+import { ActionFooter } from './blocks';
 import s from './DetailModal.module.pcss';
 
 type Props = {
@@ -39,6 +39,12 @@ type Props = {
     onBlock: (domain: string) => void;
     onAddToAllowlist: (domain: string) => void;
     onAllowService: (serviceId: string) => void;
+    onDisableFilter: (filter: Filter) => void;
+    onDisableSafeBrowsing: () => void;
+    onDisableParental: () => void;
+    onDisableSafeSearch: () => void;
+    onRemoveRewrite: (rewrite: RewriteEntry) => void;
+    onEditRewrite: (rewrite: RewriteEntry) => void;
 };
 
 const formatResponses = (responses: { value?: string; type?: string; ttl?: number }[] = []) =>
@@ -62,18 +68,12 @@ const hasValue = (value: any) =>
     value !== undefined && value !== null && value !== '' && value !== false;
 
 export const DetailModal = (props: Props) => {
+    const [scrollAreaRef, setScrollAreaRef] = createSignal<HTMLDivElement>();
+    const { canScrollUp, canScrollDown } = useScrollEdges(scrollAreaRef);
+
     const statusKey = () =>
         getQueryStatusKey(props.entry.reason, props.entry.originalResponse ?? []);
     const reasonKey = () => getQueryReasonKey(props.entry.reason, props.entry.rules ?? []);
-    const isBlocked = () => isBlockedReason(props.entry.reason);
-    const isBlockedService = () => checkBlockedService(props.entry.reason);
-    const isSafeSearch = () => props.entry.reason === FILTERED_STATUS.FILTERED_SAFE_SEARCH;
-    const isRewrite = () =>
-        props.entry.reason === FILTERED_STATUS.REWRITE ||
-        props.entry.reason === FILTERED_STATUS.REWRITE_HOSTS ||
-        props.entry.reason === FILTERED_STATUS.REWRITE_RULE;
-    const showBlock = () => !isBlocked() && !isRewrite() && !isSafeSearch();
-    const showAllowlist = () => isBlocked() || isSafeSearch();
     const reasonDetails = () =>
         getQueryReasonDetails({
             elapsedMs: props.entry.elapsedMs,
@@ -113,25 +113,6 @@ export const DetailModal = (props: Props) => {
         </span>
     );
 
-    const handleBlock = () => {
-        props.onBlock(props.entry.domain);
-        props.onClose();
-    };
-
-    const handleAddToAllowlist = () => {
-        props.onAddToAllowlist(props.entry.domain);
-        props.onClose();
-    };
-
-    const handleAllowService = () => {
-        const sid = serviceId();
-        if (!sid) {
-            return;
-        }
-        props.onAllowService(sid);
-        props.onClose();
-    };
-
     return (
         <Dialog
             visible
@@ -143,7 +124,13 @@ export const DetailModal = (props: Props) => {
             wrapClass={s.wrap}
         >
             <div class={s.content} data-testid="query-log-detail-modal">
-                <div class={s.scrollArea} data-testid="query-log-detail-scroll-area">
+                <div
+                    ref={setScrollAreaRef}
+                    class={s.scrollArea}
+                    data-testid="query-log-detail-scroll-area"
+                    data-can-scroll-up={String(canScrollUp())}
+                    data-can-scroll-down={String(canScrollDown())}
+                >
                     <div class={s.section}>
                         <Show when={props.entry.answer_dnssec}>
                             <div class={cn(s.row, theme.text.t3, theme.text.semibold)}>
@@ -241,7 +228,7 @@ export const DetailModal = (props: Props) => {
                                         data-field="tracker-category"
                                     >
                                         {intl.getMessage('query_log_detail_category', {
-                                            value: category(),
+                                            value: captitalizeWords(category()),
                                             span: renderValue,
                                         })}
                                     </div>
@@ -478,63 +465,20 @@ export const DetailModal = (props: Props) => {
                     </div>
                 </div>
 
-                <div class={s.actionFooter} data-testid="query-log-detail-action-footer">
-                    <Show when={showBlock()}>
-                        <Button
-                            data-testid="query-log-detail-action-block"
-                            data-action="block"
-                            type="button"
-                            variant="danger"
-                            size="small"
-                            class={s.actionButton}
-                            onClick={handleBlock}
-                        >
-                            {intl.getMessage('block')}
-                        </Button>
-                    </Show>
-
-                    <Show when={showAllowlist()}>
-                        <Button
-                            data-testid="query-log-detail-action-allowlist"
-                            data-action="allowlist"
-                            type="button"
-                            variant="primary"
-                            size="small"
-                            class={s.actionButton}
-                            onClick={handleAddToAllowlist}
-                        >
-                            {intl.getMessage('add_to_allowlist')}
-                        </Button>
-                    </Show>
-
-                    <Show when={isBlockedService() && serviceId()}>
-                        <Button
-                            data-testid="query-log-detail-action-allow-service"
-                            data-action="allow-service"
-                            type="button"
-                            variant="secondary"
-                            size="small"
-                            class={s.actionButton}
-                            onClick={handleAllowService}
-                        >
-                            {intl.getMessage('allow_service')}
-                        </Button>
-                    </Show>
-
-                    <Show when={!showBlock() && !showAllowlist()}>
-                        <Button
-                            data-testid="query-log-detail-action-close"
-                            data-action="close"
-                            type="button"
-                            variant="primary"
-                            size="small"
-                            class={s.actionButton}
-                            onClick={props.onClose}
-                        >
-                            {intl.getMessage('close')}
-                        </Button>
-                    </Show>
-                </div>
+                <ActionFooter
+                    entry={props.entry}
+                    filters={props.filters}
+                    onClose={props.onClose}
+                    onBlock={props.onBlock}
+                    onAddToAllowlist={props.onAddToAllowlist}
+                    onAllowService={props.onAllowService}
+                    onDisableFilter={props.onDisableFilter}
+                    onDisableSafeBrowsing={props.onDisableSafeBrowsing}
+                    onDisableParental={props.onDisableParental}
+                    onDisableSafeSearch={props.onDisableSafeSearch}
+                    onRemoveRewrite={props.onRemoveRewrite}
+                    onEditRewrite={props.onEditRewrite}
+                />
             </div>
         </Dialog>
     );

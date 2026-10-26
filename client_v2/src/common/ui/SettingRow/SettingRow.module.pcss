@@ -9,7 +9,12 @@
         border-radius: 8px;
     }
 
-    &:hover,
+    @media (hover: hover) {
+        &:hover:not(.switchDisabled) {
+            background-color: var(--page-background-additional);
+        }
+    }
+
     &:focus-visible {
         background-color: var(--page-background-additional);
     }
@@ -22,14 +27,14 @@
 .switchDisabled {
     cursor: default;
 
-    &:hover,
     &:focus {
         background-color: transparent;
     }
 
     .title,
     .desc,
-    .value {
+    .value,
+    .arrow {
         color: var(--disabled-main-text);
     }
 
@@ -60,6 +65,7 @@
 
 .text {
     padding: 8px 0;
+    min-width: 0;
 }
 
 .title {
@@ -68,8 +74,19 @@
     color: var(--default-main-text);
 }
 
+.titleLink {
+    color: var(--default-link);
+}
+
 .titleDisabled {
     color: var(--disabled-main-text);
+}
+
+.prefixIcon {
+    display: flex;
+    align-items: flex-start;
+    padding: 8px 0;
+    flex-shrink: 0;
 }
 
 .desc {
@@ -90,8 +107,9 @@
 
 .value {
     margin-top: 8px;
-    font-weight: var(--weight-semi-bold);
+    font-weight: var(--weight-medium);
     color: var(--default-description-text);
+    overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;

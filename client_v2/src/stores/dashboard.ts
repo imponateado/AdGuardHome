@@ -29,6 +29,7 @@ type DashboardState = {
     isCoreRunning: boolean;
     processingVersion: boolean;
     processingClients: boolean;
+    clientsInitialized: boolean;
     processingUpdate: boolean;
     processingProfile: boolean;
     protectionEnabled: boolean;
@@ -57,6 +58,7 @@ const initialState: DashboardState = {
     isCoreRunning: true,
     processingVersion: true,
     processingClients: true,
+    clientsInitialized: false,
     processingUpdate: false,
     processingProfile: true,
     protectionEnabled: false,
@@ -166,6 +168,34 @@ export const getDnsStatus = async () => {
         checkStatus(handleRequestSuccess, handleRequestError);
     } catch {
         handleRequestError();
+    }
+};
+
+/**
+ * Refreshes the server status fields other pages derive from — the DNS
+ * addresses above all.  Unlike `getDnsStatus` it leaves the global
+ * `processing` flag alone (that flag gates the whole routed content), skips
+ * the version, TLS status and profile requests, and keeps the previous values
+ * on failure instead of reloading the page.  Settings that change the
+ * addresses (enabling encryption above all) call it so pages like the Setup
+ * Guide show the new values without a full reload.
+ */
+export const refreshDnsStatus = async (): Promise<void> => {
+    try {
+        const dnsStatus = await customFetch<ServerStatus>(getStatusUrl(), {
+            method: 'GET',
+            skipAuthRedirect: true,
+        });
+        if (!dnsStatus || dnsStatus.running !== true) {
+            return;
+        }
+        setState({
+            dnsPort: dnsStatus.dns_port,
+            dnsAddresses: dnsStatus.dns_addresses || [],
+            httpPort: dnsStatus.http_port,
+        });
+    } catch {
+        // A background refresh must not interrupt the UI: keep the old values.
     }
 };
 
@@ -291,10 +321,11 @@ export const getClients = async () => {
             autoClients: sortClients(data.auto_clients || []),
             supportedTags: data.supported_tags || [],
             processingClients: false,
+            clientsInitialized: true,
         });
     } catch (error) {
         addErrorToast({ error });
-        setState('processingClients', false);
+        setState({ processingClients: false, clientsInitialized: true });
     }
 };
 

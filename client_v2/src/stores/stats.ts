@@ -10,6 +10,7 @@ import {
 import { addErrorToast, addSuccessToast } from './toasts';
 import intl from 'panel/common/intl';
 import { DAY, HOUR, STATS_INTERVALS_DAYS, TIME_UNITS } from 'panel/helpers/constants';
+import { clampStatsPeriod } from 'panel/helpers/statistics';
 import {
     normalizeTopStats,
     normalizeTopClients,
@@ -25,6 +26,10 @@ type StatsState = {
     processingSetConfig: boolean;
     processingStats: boolean;
     processingReset: boolean;
+    /** Whether the stats config (interval etc.) has been fetched from the server. */
+    configLoaded: boolean;
+    configInitialized: boolean;
+    statsInitialized: boolean;
     interval: number;
     customInterval: number | null;
     dnsQueries: number[];
@@ -57,6 +62,9 @@ const initialState: StatsState = {
     processingSetConfig: false,
     processingStats: true,
     processingReset: false,
+    configLoaded: false,
+    configInitialized: false,
+    statsInitialized: false,
     interval: DAY,
     customInterval: null,
     dnsQueries: [],
@@ -86,7 +94,10 @@ const [state, setState] = createStore<StatsState>(initialState);
 export const getStats = async (period?: number) => {
     setState('processingStats', true);
     try {
-        const data = await stats(period != null ? { recent: period } : undefined);
+        // Clamp by the real retention so callers don't have to know it.
+        const data = await stats(
+            period != null ? { recent: clampStatsPeriod(period, state.interval) } : undefined,
+        );
 
         const normalizedTopClientsList = normalizeTopStats(data.top_clients || []);
         const clientsParams = getParamsForClientsSearch(normalizedTopClientsList, 'name');
@@ -117,10 +128,11 @@ export const getStats = async (period?: number) => {
             ),
             topUpstreamsResponses: normalizeTopStats(data.top_upstreams_responses || []),
             processingStats: false,
+            statsInitialized: true,
         });
     } catch (error) {
         addErrorToast({ error });
-        setState('processingStats', false);
+        setState({ processingStats: false, statsInitialized: true });
     }
 };
 
@@ -137,10 +149,12 @@ export const getStatsConfig = async () => {
             ignored: data.ignored || [],
             ignored_enabled: data.ignored_enabled ?? false,
             processingGetConfig: false,
+            configLoaded: true,
+            configInitialized: true,
         });
     } catch (error) {
         addErrorToast({ error });
-        setState('processingGetConfig', false);
+        setState({ processingGetConfig: false, configInitialized: true });
     }
 };
 
@@ -155,6 +169,19 @@ export const setStatsConfig = async (values: GetStatsConfigResponse): Promise<bo
         setState('processingSetConfig', false);
         return false;
     }
+};
+
+export const enableStatistics = async (period?: number): Promise<boolean> => {
+    const result = await setStatsConfig({
+        enabled: true,
+        interval: state.interval,
+        ignored: state.ignored,
+        ignored_enabled: state.ignored_enabled,
+    });
+    if (result) {
+        await getStats(period);
+    }
+    return result;
 };
 
 export const resetStats = async () => {

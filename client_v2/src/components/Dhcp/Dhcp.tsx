@@ -2,8 +2,7 @@ import { createSignal, createEffect, onMount, Show } from 'solid-js';
 import cn from 'clsx';
 import { useNavigate } from '@solidjs/router';
 
-import { Dropdown } from 'panel/common/ui/Dropdown';
-import { Icon } from 'panel/common/ui/Icon';
+import { DangerLink } from 'panel/common/ui/DangerLink';
 import { PageLoader } from 'panel/common/ui/Loader';
 import { SettingRow } from 'panel/common/ui/SettingRow';
 import { ConfirmDialog } from 'panel/common/ui/ConfirmDialog';
@@ -36,7 +35,6 @@ export const Dhcp = () => {
 
     const [selectedInterface, setSelectedInterface] = createSignal(dhcpState.interface_name || '');
     const [showAllIps, setShowAllIps] = createSignal(false);
-    const [menuOpen, setMenuOpen] = createSignal(false);
 
     createEffect(() => {
         if (dhcpState.interface_name) {
@@ -88,21 +86,11 @@ export const Dhcp = () => {
     const hasIpv6 = () =>
         !!(dhcpState.interfaces && dhcpState.interfaces[selectedInterface()]?.ipv6_addresses);
 
-    const handleResetClick = () => {
-        setMenuOpen(false);
-        resetDialog.openDialog();
-    };
-
-    const resetMenu = (
-        <div
-            class={cn(theme.dropdown.item, theme.dropdown.item_danger, theme.dropdown.item_large)}
-            onClick={handleResetClick}
-        >
-            {intl.getMessage('reset_dhcp_settings')}
-        </div>
-    );
-
-    const isLoaded = () => !dhcpState.processing && !dhcpState.processingInterfaces;
+    // The interfaces request only runs when DHCP is available, so a board
+    // without DHCP support is "loaded" as soon as its status settles.
+    const isLoaded = () =>
+        dhcpState.statusInitialized &&
+        (!dhcpState.dhcp_available || dhcpState.interfacesInitialized);
 
     return (
         <div class={theme.layout.container}>
@@ -110,11 +98,18 @@ export const Dhcp = () => {
                 <Show when={isLoaded()} fallback={<PageLoader />}>
                     <Show when={!dhcpState.dhcp_available}>
                         <div class={s.unavailable}>
-                            <h1 class={cn(theme.title.h4, theme.title.h3_tablet)}>
-                                {intl.getMessage('unavailable_dhcp')}
+                            <h1
+                                class={cn(
+                                    theme.layout.title,
+                                    theme.title.h4,
+                                    theme.title.h3_tablet,
+                                    s.title,
+                                )}
+                            >
+                                {intl.getMessage('dhcp')}
                             </h1>
-                            <div class={theme.text.t2}>
-                                {intl.getMessage('unavailable_dhcp_desc')}
+                            <div class={cn(theme.text.t2, s.unavailableDesc)}>
+                                {intl.getMessage('unavailable_dhcp')}
                             </div>
                         </div>
                     </Show>
@@ -131,21 +126,6 @@ export const Dhcp = () => {
                             >
                                 {intl.getMessage('dhcp')}
                             </h1>
-                            <Dropdown
-                                position="bottomRight"
-                                noIcon
-                                open={menuOpen()}
-                                onOpenChange={setMenuOpen}
-                                menu={resetMenu}
-                            >
-                                <button
-                                    type="button"
-                                    class={cn(theme.form.action, s.menuButton)}
-                                    aria-label={intl.getMessage('reset_dhcp_settings')}
-                                >
-                                    <Icon icon="bullets" />
-                                </button>
-                            </Dropdown>
                         </div>
 
                         <DhcpToggle
@@ -191,6 +171,10 @@ export const Dhcp = () => {
                                 onClick={() => navigate(Paths.DhcpLeases)}
                             />
                         </div>
+
+                        <DangerLink onClick={resetDialog.openDialog}>
+                            {intl.getMessage('reset_dhcp_settings')}
+                        </DangerLink>
 
                         <DhcpV4Modal
                             open={v4Dialog.open()}

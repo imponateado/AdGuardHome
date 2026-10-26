@@ -16,6 +16,7 @@ type PlatformLayoutProps = {
     serverName?: string;
     portHttps?: number;
     dnsAddresses?: string[];
+    isInstall?: boolean;
 };
 
 type PlatformLayout = {
@@ -26,13 +27,13 @@ type PlatformLayout = {
 
 type PlatformLayouts = Record<string, PlatformLayout>;
 
-const RouterLayout = () => (
+const RouterLayout = (props: PlatformLayoutProps) => (
     <div class={s.guideContent}>
         <div class={s.title}>{intl.getMessage('setup_devices_router_title')}</div>
         <div class={s.guideText}>
             <div class={s.guideParagraph}>{intl.getMessage('setup_devices_router_desc_1')}</div>
             <ol class={cn({ [s.strongNumbers]: true })}>
-                <li class={s.guideItem}>
+                <li>
                     <strong class={s.guideItemTitle}>
                         {intl.getMessage('setup_devices_router_list_1_title')}
                     </strong>
@@ -41,7 +42,7 @@ const RouterLayout = () => (
                         code2: () => <CopiedText text="http://192.168.1.1" />,
                     })}
                 </li>
-                <li class={s.guideItem}>
+                <li>
                     <strong class={s.guideItemTitle}>
                         {intl.getMessage('setup_devices_router_list_2_title')}
                     </strong>
@@ -50,11 +51,14 @@ const RouterLayout = () => (
             </ol>
             <div class={s.guideParagraph}>
                 {intl.getMessage('setup_devices_router_desc_2', {
-                    a: (text: string) => (
-                        <A href={Paths.Dhcp} class={s.dnsLink}>
-                            {text}
-                        </A>
-                    ),
+                    a: (text: string) =>
+                        props.isInstall ? (
+                            text
+                        ) : (
+                            <A href={Paths.Dhcp} class={s.dnsLink}>
+                                {text}
+                            </A>
+                        ),
                 })}
             </div>
         </div>
@@ -64,14 +68,14 @@ const RouterLayout = () => (
 const WindowsLayout = () => (
     <div title="Windows">
         <div class={s.title}>{intl.getMessage('setup_devices_windows_title')}</div>
-        <div class={s.text}>
+        <div class={s.guideText}>
             <ol class={s.guideList}>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_windows_list_1')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_windows_list_2')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_windows_list_3')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_windows_list_4')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_windows_list_5')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_windows_list_6')}</li>
+                <li>{intl.getMessage('setup_devices_windows_list_1')}</li>
+                <li>{intl.getMessage('setup_devices_windows_list_2')}</li>
+                <li>{intl.getMessage('setup_devices_windows_list_3')}</li>
+                <li>{intl.getMessage('setup_devices_windows_list_4')}</li>
+                <li>{intl.getMessage('setup_devices_windows_list_5')}</li>
+                <li>{intl.getMessage('setup_devices_windows_list_6')}</li>
             </ol>
         </div>
     </div>
@@ -80,11 +84,11 @@ const WindowsLayout = () => (
 const MacOSLayout = () => (
     <div title="macOS">
         <div class={s.title}>macOS</div>
-        <div class={s.text}>
+        <div class={s.guideText}>
             <ol class={s.guideList}>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_macos_list_1')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_macos_list_2')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_macos_list_3')}</li>
+                <li>{intl.getMessage('setup_devices_macos_list_1')}</li>
+                <li>{intl.getMessage('setup_devices_macos_list_2')}</li>
+                <li>{intl.getMessage('setup_devices_macos_list_3')}</li>
             </ol>
         </div>
     </div>
@@ -93,12 +97,12 @@ const MacOSLayout = () => (
 const AndroidLayout = () => (
     <div title="Android">
         <div class={s.title}>Android</div>
-        <div class={s.text}>
+        <div class={s.guideText}>
             <ol class={s.guideList}>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_android_list_1')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_android_list_2')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_android_list_3')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_android_list_4')}</li>
+                <li>{intl.getMessage('setup_devices_android_list_1')}</li>
+                <li>{intl.getMessage('setup_devices_android_list_2')}</li>
+                <li>{intl.getMessage('setup_devices_android_list_3')}</li>
+                <li>{intl.getMessage('setup_devices_android_list_4')}</li>
             </ol>
         </div>
     </div>
@@ -107,19 +111,19 @@ const AndroidLayout = () => (
 const IOSLayout = () => (
     <div title="iOS">
         <div class={s.title}>iOS</div>
-        <div class={s.text}>
+        <div class={s.guideText}>
             <ol class={s.guideList}>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_ios_list_1')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_ios_list_2')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_ios_list_3')}</li>
-                <li class={s.guideItem}>{intl.getMessage('setup_devices_ios_list_4')}</li>
+                <li>{intl.getMessage('setup_devices_ios_list_1')}</li>
+                <li>{intl.getMessage('setup_devices_ios_list_2')}</li>
+                <li>{intl.getMessage('setup_devices_ios_list_3')}</li>
+                <li>{intl.getMessage('setup_devices_ios_list_4')}</li>
             </ol>
         </div>
     </div>
 );
 
 const renderDnsDevicesList = () => (
-    <div class={s.deviceDnsList}>
+    <div>
         <div class={s.guideParagraph}>
             <div class={s.guideTitle}>
                 <strong>Android</strong>
@@ -299,6 +303,7 @@ const getDnsSettingsContent = (
     dnsAddresses: string[] | undefined,
     serverName?: string,
     portHttps?: number,
+    isInstall?: boolean,
 ) => {
     const tlsAddress = dnsAddresses?.filter((addr: string) => addr.includes('tls://')) ?? [];
     const httpsAddress = dnsAddresses?.filter((addr: string) => addr.includes('https://')) ?? [];
@@ -310,16 +315,19 @@ const getDnsSettingsContent = (
     return showDnsPrivacyNotice ? (
         <div class={s.guideParagraph}>
             {intl.getMessage('setup_dns_notice_new', {
-                a: (text: string) => (
-                    <A href={Paths.Encryption} class={s.dnsLink}>
-                        {text}
-                    </A>
-                ),
+                a: (text: string) =>
+                    isInstall ? (
+                        text
+                    ) : (
+                        <A href={Paths.Encryption} class={s.dnsLink}>
+                            {text}
+                        </A>
+                    ),
             })}
         </div>
     ) : (
         <div class={s.dnsSettingsContent}>
-            <ul class={s.deviceDnsList}>
+            <ul class={s.guideList}>
                 <Show when={tlsAddress.length > 0}>
                     <li class={s.deviceDnsListItem}>
                         {intl.getMessage('setup_devices_dns_list_1', {
@@ -370,8 +378,13 @@ const getDnsSettingsContent = (
 const DnsPrivacyLayout = (props: PlatformLayoutProps) => (
     <div title={intl.getMessage('dns_privacy')}>
         <div class={s.title}>{intl.getMessage('dns_privacy')}</div>
-        <div class={s.text}>
-            {getDnsSettingsContent(props.dnsAddresses, props.serverName, props.portHttps)}
+        <div>
+            {getDnsSettingsContent(
+                props.dnsAddresses,
+                props.serverName,
+                props.portHttps,
+                props.isInstall,
+            )}
         </div>
     </div>
 );
@@ -380,7 +393,7 @@ const getPlatformLayouts = (params: PlatformLayoutProps): PlatformLayouts => ({
     Router: {
         title: intl.getMessage('setup_devices_router_title'),
         icon: 'router',
-        component: <RouterLayout />,
+        component: <RouterLayout isInstall={params.isInstall} />,
     },
     Windows: {
         title: intl.getMessage('setup_devices_windows_title'),
@@ -410,6 +423,7 @@ const getPlatformLayouts = (params: PlatformLayoutProps): PlatformLayouts => ({
                 serverName={params.serverName}
                 portHttps={params.portHttps}
                 dnsAddresses={params.dnsAddresses}
+                isInstall={params.isInstall}
             />
         ),
     },
@@ -417,6 +431,7 @@ const getPlatformLayouts = (params: PlatformLayoutProps): PlatformLayouts => ({
 
 type Props = {
     dnsAddresses?: string[];
+    isInstall?: boolean;
 };
 
 export const Guide = (props: Props) => {
@@ -430,6 +445,7 @@ export const Guide = (props: Props) => {
             serverName: serverName(),
             portHttps: portHttps(),
             dnsAddresses: props.dnsAddresses,
+            isInstall: props.isInstall,
         });
 
     const selectOptions = createMemo(() =>

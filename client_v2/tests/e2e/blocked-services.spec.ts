@@ -278,12 +278,92 @@ test.describe('Blocked Services Page', () => {
         await expect(epicToggle).not.toBeAttached();
     });
 
+    test('should display blocked/unblocked pills and divider', async ({ page }) => {
+        const blockedPill = page.getByTestId('blocked-services-show-blocked-only');
+        const unblockedPill = page.getByTestId('blocked-services-show-unblocked-only');
+        const divider = page.getByTestId('blocked-services-filters-divider');
+
+        await expect(blockedPill).toBeVisible();
+        await expect(unblockedPill).toBeVisible();
+        await expect(divider).toBeVisible();
+
+        // Both pills are inactive by default — all services are visible
+        await expect(blockedPill).toHaveAttribute('aria-pressed', 'false');
+        await expect(unblockedPill).toHaveAttribute('aria-pressed', 'false');
+        const allServices = page.locator('[data-testid^="blocked-service-row-"]');
+        await expect(allServices).toHaveCount(8);
+    });
+
+    test('should show only blocked services when blocked only pill is active', async ({ page }) => {
+        const blockedPill = page.getByTestId('blocked-services-show-blocked-only');
+        await blockedPill.click();
+
+        await expect(blockedPill).toHaveAttribute('aria-pressed', 'true');
+
+        // Blocked mock services are telegram and steam
+        await expect(page.locator('input#service_telegram')).toBeAttached();
+        await expect(page.locator('input#service_steam')).toBeAttached();
+
+        // Unblocked services should be hidden
+        await expect(page.locator('input#service_whatsapp')).not.toBeAttached();
+        await expect(page.locator('input#service_tiktok')).not.toBeAttached();
+    });
+
+    test('should show only unblocked services when unblocked only pill is active', async ({
+        page,
+    }) => {
+        const unblockedPill = page.getByTestId('blocked-services-show-unblocked-only');
+        await unblockedPill.click();
+
+        await expect(unblockedPill).toHaveAttribute('aria-pressed', 'true');
+
+        // Unblocked mock services should be visible
+        await expect(page.locator('input#service_whatsapp')).toBeAttached();
+        await expect(page.locator('input#service_tiktok')).toBeAttached();
+
+        // Blocked services should be hidden
+        await expect(page.locator('input#service_telegram')).not.toBeAttached();
+        await expect(page.locator('input#service_steam')).not.toBeAttached();
+    });
+
+    test('should deactivate state filter when pill is clicked again', async ({ page }) => {
+        const blockedPill = page.getByTestId('blocked-services-show-blocked-only');
+
+        // Activate filter
+        await blockedPill.click();
+        await expect(page.locator('input#service_whatsapp')).not.toBeAttached();
+
+        // Deactivate filter
+        await blockedPill.click();
+        await expect(blockedPill).toHaveAttribute('aria-pressed', 'false');
+
+        // All services should be visible again
+        const allServices = page.locator('[data-testid^="blocked-service-row-"]');
+        await expect(allServices).toHaveCount(8);
+    });
+
+    test('should switch between blocked and unblocked state filters', async ({ page }) => {
+        const blockedPill = page.getByTestId('blocked-services-show-blocked-only');
+        const unblockedPill = page.getByTestId('blocked-services-show-unblocked-only');
+
+        await blockedPill.click();
+        await expect(blockedPill).toHaveAttribute('aria-pressed', 'true');
+
+        // Switching to unblocked only should deactivate the blocked pill
+        await unblockedPill.click();
+        await expect(unblockedPill).toHaveAttribute('aria-pressed', 'true');
+        await expect(blockedPill).toHaveAttribute('aria-pressed', 'false');
+
+        await expect(page.locator('input#service_whatsapp')).toBeAttached();
+        await expect(page.locator('input#service_telegram')).not.toBeAttached();
+    });
+
     test('should navigate to inactivity schedule page', async ({ page }) => {
         const navItem = page.getByTestId('blocked-services-schedule-link');
         await navItem.click();
 
         // Should be on schedule page
-        await expect(page).toHaveURL(/#blocked_services\/schedule/);
+        await expect(page).toHaveURL(/#\/?blocked_services\/schedule/);
     });
 
     // TODO: Check if the component actually disables switches during API calls.
@@ -340,7 +420,7 @@ test.describe('Inactivity Schedule Page', () => {
             .getByRole('link', { name: 'Blocked services' });
         await breadcrumb.click();
 
-        await expect(page).toHaveURL(/#blocked_services$/);
+        await expect(page).toHaveURL(/#\/?blocked_services$/);
     });
 
     test('should display timezone selector', async ({ page }) => {
@@ -412,6 +492,94 @@ test.describe('Inactivity Schedule Page', () => {
         // Modal should be visible
         const modal = page.locator('.rc-dialog-update');
         await expect(modal).toBeVisible();
+    });
+
+    test('should keep the time dropdown inside the dialog', async ({ page }) => {
+        // Regression: zag-js clamps the dropdown positioner to the space between
+        // the trigger and the nearest clipping ancestor (the dialog card) and
+        // exposes that budget as `--available-height`. The list used to ignore it
+        // and was painted past the positioner, so the card's own `overflow: auto`
+        // hard-cut the menu - no bottom radius, no shadow, extra card scrollbar.
+        //
+        // The clamp relies on `display: flex` on the menu, which outranks the UA
+        // `[hidden] { display: none }` rule - so a closed menu must be hidden
+        // explicitly, otherwise it stays on screen and swallows clicks.
+        const paintedMenus = () =>
+            page.evaluate(
+                () =>
+                    [
+                        ...document.querySelectorAll<HTMLElement>(
+                            '[data-scope="select"][data-part="content"], [data-scope="combobox"][data-part="content"]',
+                        ),
+                    ]
+                        .filter((content) => content.getBoundingClientRect().height > 0)
+                        .map((content) => Math.round(content.getBoundingClientRect().height)),
+            );
+
+        await page.getByTestId('schedule-row-tue-add').click();
+        await expect(page.locator('.rc-dialog-update .dialog-content')).toBeVisible();
+
+        // No menu is open yet, so nothing may be painted.
+        expect(await paintedMenus(), 'closed menus stay hidden').toEqual([]);
+
+        await page
+            .locator('.rc-dialog-update [data-scope="select"][data-part="trigger"]')
+            .first()
+            .click();
+
+        // zag-js positions the menu on the next animation frame, so wait until
+        // the budget it computed is actually applied before measuring.
+        const openPositioner = () =>
+            page.evaluate(
+                () =>
+                    document
+                        .querySelector<HTMLElement>(
+                            '.rc-dialog-update [data-part="positioner"]:has([data-part="content"]:not([hidden]))',
+                        )
+                        ?.style.getPropertyValue('--available-height') ?? '',
+            );
+
+        await expect.poll(openPositioner).not.toBe('');
+
+        const geometry = await page.evaluate(() => {
+            // Only the open menu has a visible content box.
+            const positioner = document.querySelector<HTMLElement>(
+                '.rc-dialog-update [data-part="positioner"]:has([data-part="content"]:not([hidden]))',
+            );
+            const card = document.querySelector<HTMLElement>(
+                '.rc-dialog-update .dialog-content',
+            );
+            const content = positioner?.querySelector<HTMLElement>('[data-part="content"]');
+            const group = positioner?.querySelector<HTMLElement>('[data-part="item-group"]');
+            if (!positioner || !card || !content || !group) {
+                return null;
+            }
+
+            return {
+                availableHeight: positioner.style.getPropertyValue('--available-height'),
+                contentBottom: content.getBoundingClientRect().bottom,
+                cardBottom: card.getBoundingClientRect().bottom,
+                groupScrollHeight: group.scrollHeight,
+                groupClientHeight: group.clientHeight,
+                cardScrollHeight: card.scrollHeight,
+                cardClientHeight: card.clientHeight,
+            };
+        });
+
+        expect(geometry, 'open dropdown found inside the dialog').not.toBeNull();
+
+        // Exactly one menu is painted - the open one, at its clamped height.
+        const painted = await paintedMenus();
+        expect(painted.length, 'only the open menu is painted').toBe(1);
+        expect(painted[0]).toBe(geometry?.groupClientHeight);
+
+        // The menu must honour the space the dialog leaves for it...
+        expect(geometry?.availableHeight).not.toBe('');
+        expect(geometry?.contentBottom).toBeLessThanOrEqual(geometry?.cardBottom! + 1);
+        // ...scroll its list instead of overflowing...
+        expect(geometry?.groupScrollHeight).toBeGreaterThan(geometry?.groupClientHeight!);
+        // ...and no longer add scrollable overflow to the card.
+        expect(geometry?.cardScrollHeight).toBeLessThanOrEqual(geometry?.cardClientHeight! + 1);
     });
 
     test('should show confirmation dialog when delete is clicked', async ({ page }) => {
@@ -623,7 +791,7 @@ test.describe('Blocked Services - Schedule Integration', () => {
         const navItem = page.getByTestId('blocked-services-schedule-link');
         await navItem.click();
 
-        await expect(page).toHaveURL(/#blocked_services\/schedule/);
+        await expect(page).toHaveURL(/#\/?blocked_services\/schedule/);
 
         // Navigate back via breadcrumbs
         const breadcrumb = page
@@ -631,6 +799,6 @@ test.describe('Blocked Services - Schedule Integration', () => {
             .getByRole('link', { name: 'Blocked services' });
         await breadcrumb.click();
 
-        await expect(page).toHaveURL(/#blocked_services$/);
+        await expect(page).toHaveURL(/#\/?blocked_services$/);
     });
 });

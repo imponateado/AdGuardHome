@@ -4,7 +4,11 @@ import intl from 'panel/common/intl';
 import { ConfigDialog } from 'panel/common/ui/ConfigDialog';
 import { Input } from 'panel/common/controls/Input';
 import { UINT32_RANGE } from 'panel/helpers/constants';
-import { validateBetween, validateRequiredValue } from 'panel/helpers/validators';
+import {
+    validateBetween,
+    validateCacheSize,
+    validateRequiredValue,
+} from 'panel/helpers/validators';
 import { useField } from 'panel/hooks/useField';
 import theme from 'panel/lib/theme';
 
@@ -33,7 +37,8 @@ const CACHE_DIALOG_CONFIG: Record<
         label: () => intl.getMessage('dns_cache_size_label'),
         validate: (v) =>
             validateRequiredValue(v) ||
-            validateBetween(Number(v), UINT32_RANGE.MIN, UINT32_RANGE.MAX) ||
+            validateBetween(Number(v), UINT32_RANGE.MIN, UINT32_RANGE.MAX, { integer: true }) ||
+            validateCacheSize(Number(v), !!dnsConfigState.cache_enabled) ||
             '',
     },
     cache_ttl_min: {
@@ -41,10 +46,23 @@ const CACHE_DIALOG_CONFIG: Record<
         description: () => intl.getMessage('dns_override_min_ttl_desc'),
         label: () => intl.getMessage('dns_override_min_ttl_label'),
         placeholder: () => intl.getMessage('dns_override_min_ttl_placeholder'),
-        validate: (v) =>
-            validateRequiredValue(v) ||
-            validateBetween(Number(v), UINT32_RANGE.MIN, UINT32_RANGE.MAX) ||
-            '',
+        validate: (v) => {
+            const requiredErr = validateRequiredValue(v);
+            if (requiredErr) return requiredErr;
+            const num = Number(v);
+            const rangeErr = validateBetween(num, UINT32_RANGE.MIN, UINT32_RANGE.MAX, {
+                integer: true,
+            });
+            if (rangeErr) return rangeErr;
+            // Cross-field TTL check: min > max.  Only the maximum used to run
+            // this check, so a minimum above the stored maximum was accepted,
+            // persisted, and then rejected while reconfiguring the DNS server.
+            const maxVal = Number(dnsConfigState.cache_ttl_max);
+            if (maxVal > 0 && num > 0 && num > maxVal) {
+                return intl.getMessage('cache_config_ttl_validation');
+            }
+            return '';
+        },
     },
     cache_ttl_max: {
         title: () => intl.getMessage('dns_override_max_ttl_title'),
@@ -55,7 +73,9 @@ const CACHE_DIALOG_CONFIG: Record<
             const requiredErr = validateRequiredValue(v);
             if (requiredErr) return requiredErr;
             const num = Number(v);
-            const rangeErr = validateBetween(num, UINT32_RANGE.MIN, UINT32_RANGE.MAX);
+            const rangeErr = validateBetween(num, UINT32_RANGE.MIN, UINT32_RANGE.MAX, {
+                integer: true,
+            });
             if (rangeErr) return rangeErr;
             // Cross-field TTL check: min > max
             const minVal = Number(dnsConfigState.cache_ttl_min);
@@ -85,7 +105,21 @@ export const CacheInputDialog = (props: Props) => {
             onSubmit={() => {
                 const configKey = props.configKey;
                 field.submitIfValid((v) => {
-                    setDnsConfig({ [configKey]: v === '' ? 0 : Number(v) });
+                    const value = v === '' ? 0 : Number(v);
+                    const cacheEnabled = dnsConfigState.cache_enabled;
+
+                    // The backend infers `cache_enabled` from `cache_size` when omitted, so send
+                    // the known flag to keep the switch in sync, and omit it when it is unknown.
+                    setDnsConfig(
+                        configKey === 'cache_size'
+                            ? {
+                                  cache_size: value,
+                                  ...(cacheEnabled !== undefined
+                                      ? { cache_enabled: cacheEnabled }
+                                      : {}),
+                              }
+                            : { [configKey]: value },
+                    );
                     untrack(() => props.onClose());
                 });
             }}
@@ -104,6 +138,7 @@ export const CacheInputDialog = (props: Props) => {
                     max={UINT32_RANGE.MAX}
                     errorMessage={field.error()}
                     size="large"
+                    onCard
                 />
             </div>
         </ConfigDialog>

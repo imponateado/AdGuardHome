@@ -8,6 +8,8 @@
 - [Technical Context](#technical-context)
 - [Project Structure](#project-structure)
 - [Build And Test Commands](#build-and-test-commands)
+    - [Fast verification loop](#fast-verification-loop)
+    - [Backend for UI checks](#backend-for-ui-checks)
 - [Contribution Instructions](#contribution-instructions)
 - [Code Guidelines](#code-guidelines)
     - [System Design](#system-design)
@@ -86,7 +88,8 @@ client_v2/
 │   │   └── styles/                # Theme tokens (vars.css, colors/light|dark|adg.css)
 │   ├── components/                # Feature/page components (Dashboard, Clients, QueryLog, …)
 │   │   ├── App/                   # Root component — HashRouter + layout + <Route>s
-│   │   └── Routes/Paths.ts        # Route path constants
+│   │   ├── Routes/Paths.ts        # Route path constants
+│   │   └── Stats/                 # Dashboard "Show more" detail pages (top clients, domains, upstreams)
 │   ├── helpers/                   # Pure utilities, validators, theme helpers
 │   ├── hooks/                     # Shared SolidJS hooks
 │   ├── lib/                       # Theme aggregation, misc utils
@@ -113,7 +116,9 @@ client_v2/
 
 # Build And Test Commands
 
-All commands are run from the `client_v2/` directory.
+All commands are run from the `client_v2/` directory. If your terminal's
+working directory is the repo root (or anywhere else), `cd client_v2` first —
+never run `npm`/`npx` from the repo root.
 
 | Task                                 | Command                        |
 | ------------------------------------ | ------------------------------ |
@@ -125,6 +130,7 @@ All commands are run from the `client_v2/` directory.
 | Lint                                 | `npm run lint`                 |
 | Lint + format fix                    | `npm run lint:fix`             |
 | Unit tests (single run)              | `npm run test`                 |
+| Unit tests (single file)             | `npm run test -- <path>`       |
 | Unit tests (watch)                   | `npm run test:watch`           |
 | E2e tests                            | `npm run test:e2e`             |
 | E2e interactive UI                   | `npm run test:e2e:interactive` |
@@ -133,21 +139,104 @@ All commands are run from the `client_v2/` directory.
 | Translation check                    | `npm run translations:check`   |
 | Full check (lint + typecheck + test) | `npm run check`                |
 
+> **Note**: `npm run test` runs the **entire** suite. While iterating, run a
+> single file with `npm run test -- <path>`, optionally filtered to one
+> test by name with `-t "<name>"` (a regex matching test names containing the
+> pattern). Run `npm run check` only once, at the end — see "Fast
+> verification loop" below.
+
+### Fast verification loop
+
+While iterating, run the focused command and read its result directly: the
+terminal tool reports the exit code, and any output over 20 KiB is saved to a
+temp file whose path you can search.
+
+```bash
+# If your terminal's working directory is the repo root, cd client_v2 first.
+npm run typecheck
+npm run test -- src/__tests__/stats-pages/stats-page.test.tsx -t "<name>"
+```
+
+Replace the path with the file you are working on. Do not chain these into
+`... > log 2>&1; echo "exit:$?"; tail log` one-liners: the trailing `tail`
+becomes the reported exit code, the redirect hides the output, and the line
+falls outside the terminal allow-list, so every run needs manual approval.
+
+Only slow commands you will re-read — the full `npm run check`,
+`npm run build-prod` — may be capped to one stable log file, reused across
+runs; confirm the command actually ran before trusting its log. A stale log
+from an earlier run is the easiest way to "verify" a fix that was never
+checked.
+
+### Backend for UI checks
+
+Find a running instance with `curl` or `netstat`, never `lsof`: as a non-root
+user `lsof` hides root-owned sockets, and a root-owned (mode `0600`)
+`AdGuardHome.yaml` means the instance runs as a service under `root`. The
+signature is `GET /control/status` — `401` (login required) or `200` (auth
+disabled) on AdGuard Home, `404` on an unrelated server, and a connection
+error when nothing listens. The port is `bind_port` from `AdGuardHome.yaml`;
+if that file is unreadable, probe the ports listed by
+`netstat -an -p tcp | grep LISTEN`.
+
+If no instance is running, do not hand-roll a backend or a proxy — start the
+disposable one the e2e suite uses, from the repository root:
+
+```sh
+./AdGuardHome --local-frontend -v -c /tmp/AdGuard.e2e.yaml --work-dir /tmp/AdGuard.e2e.work
+```
+
+- `npm run test:e2e` writes that config and work dir through
+  `tests/e2e/prepareConfig.mjs`; the `webServer` block in
+  `playwright.config.ts` holds the exact command and the `E2E_*` values.
+- `--local-frontend` serves `../build/static/` from disk, so
+  `npm run build-dev` plus a page reload shows your change.
+- It listens on `http://127.0.0.1:3000` (not `bind_port`) and is disposable:
+  sign in with the test account in `tests/constants.ts`, not with the user's
+  `.env.local` credentials. Outside CI, Playwright reuses a running instance.
+
 # Contribution Instructions
 
 - You MUST verify your work with the linter, formatter, and type checker.
 
-    Use the following commands:
-    - `npm run typecheck` to check for type errors
+    Run only the npm scripts, from the `client_v2/` directory. Do not invoke
+    the underlying binaries directly (`npx eslint ...`, `npx tsc`,
+    `npx vitest`, `node_modules/.bin/...`, etc.) — the scripts are the only
+    supported commands. In particular, never run `npx` from the repo root:
+    the repository has no root `package.json`, so `npx` tries to download the
+    tooling from the npm registry and can hang for minutes. Ad-hoc `npx` calls
+    can also install tooling into the repo root instead of
+    `client_v2/node_modules`:
+    - `npm run check` — the full gate (lint + typecheck + unit tests)
     - `npm run lint` to run the linter
     - `npm run lint:fix` to fix linting and formatting issues automatically
+    - `npm run typecheck` to check for type errors
+    - `npm run test` to run the unit tests
+    - `npm run test -- <path> [-t "<name>"]` to run a single test file,
+      optionally filtered to one test by name — see "Fast verification loop"
 
 - You MUST update the unit tests for changed code. New stores, helpers, and
   components should have corresponding tests under `src/__tests__/`.
 
-- You MUST run tests with `npm run test` to verify that your changes do not
-  break existing functionality. Use `npm run check` for the full gate
-  (lint + typecheck + test).
+- You MUST run `npm run check` after completing your changes: lint,
+  typecheck, and all unit tests must pass before the task is done.
+
+- You MUST verify UI changes against the running AdGuard Home instance, not
+  the webpack dev server: rebuild with `npm run build-dev` (quick iteration)
+  or `npm run build-prod` (final check) — both emit to `../build/static/` —
+  and open `http://127.0.0.1:<bind_port>/` from the local `AdGuardHome.yaml`
+  (commonly `3001` or `80`, never webpack's `8080`). See "Backend for UI
+  checks" above to find or start an instance when nothing is running, or when
+  that config is unreadable (root-owned) and the dev server falls back to
+  `0.0.0.0:80` without a backend.
+
+- When you need to sign in to the running AdGuard Home instance to verify UI
+  changes in the browser, read the credentials from `client_v2/.env.local`
+  (git-ignored; keys `ADGUARD_TEST_USERNAME` / `ADGUARD_TEST_PASSWORD`).
+  Never echo the password into the chat, terminal output, or log files, and
+  never commit or copy the file elsewhere. If the file is missing, ask the
+  user for the login and password with `#tool:vscode/askQuestions` — do not
+  guess credentials or reuse hardcoded ones.
 
 - When making changes to the project structure, ensure the Project Structure
   section in `AGENTS.md` is updated and remains valid.
@@ -264,18 +353,40 @@ must not depend on stores or components. Helpers are pure and dependency-free.
 './Foo.module.pcss'` — and reference classes as `s.button`, `s[variant]`.
   Compose conditional classes with `clsx`, imported as `cn`:
   `import cn from 'clsx'` (e.g. `cn(s.button, s.primary, { [s.active]: on() })`).
+- **Hover styles**: Wrap `:hover` styling in `@media (hover: hover)` so touch
+  devices do not keep a stuck highlight after a tap. Gate `:hover` together
+  with `:focus` on row links, since a tap also focuses an `<a>` in Chrome;
+  leave `:focus-visible` outlines ungated for keyboard users.
 - **Colors**: Never hardcode color hex values in `.pcss` or inline styles.
   Always reference the CSS custom properties defined in
   `src/common/styles/vars.css` and `src/common/styles/colors/*.css`
   (`var(--default-main-text)`, `var(--default-page-background)`, …). Light and
   dark themes are toggled via the `data-theme` attribute on `<html>`, so using
-  the variables handles dark mode automatically.
+  the variables handles dark mode automatically. Prefer the semantic tokens
+  (`--default-item-divider`, `--default-product-icon`, `--default-error-link`)
+  over the raw palette values (`--gray-30`, `--product-primary-50`, …) so the
+  element keeps the right _context_: an icon token for an icon, a link token
+  for text.
+- **Typography**: Do not hardcode `font-size`, `line-height`, or `font-weight`
+  in a `.pcss` file. Use the typography classes from `panel/lib/theme` via
+  `cn(...)` — `theme.title.h0`–`h6` for headings and `theme.text.t1`–`t4` for
+  body copy, with the `theme.text.condenced` / `semibold` / `medium` modifiers
+  as needed (e.g. `cn(theme.text.t3, s.label)`). The local class then carries
+  only layout, never the same properties.
 - **No inline styles**: Do not use the `style` attribute on elements. All
   styling belongs in co-located CSS Modules (`.module.pcss`) using class
   names. If a value must be dynamic, drive it through a CSS custom property or
   a conditional class via `cn(...)`, not an inline `style`. Exception: a single
   computed pixel offset for a dragging/positioning edge case may be acceptable
   when no class-based solution exists — justify it in a comment.
+- **Comments**: Write comments only where they earn their place, and keep
+  them useful and compact — one or two lines explaining a non-obvious
+  _why_: a workaround, a browser quirk, or a cross-file constraint a
+  reader would otherwise break. Do not narrate what a rule or function
+  does, restate selector/property names, or spell out measurements,
+  arithmetic, and design history; that belongs with the value it
+  constrains or in the PR description. Applies to `.pcss`, `.tsx`, and
+  tests alike. Delete a comment once the code it describes changes.
 - **Reactivity**: Use `createSignal` for local state, `createMemo` for
   derived values, `createEffect` for side effects, `onMount` for initial data
   fetches, and `onCleanup` for teardown. Do not read signals imperatively
@@ -297,6 +408,11 @@ must not depend on stores or components. Helpers are pure and dependency-free.
   catch and surface a toast. Do not swallow errors silently.
 - **Logging**: `console.warn` and `console.error` are allowed; `console.log`
   is disallowed by ESLint.
+- **IP and CIDR validation**: Validate addresses and ranges with the
+  `ipaddr.js`-backed helpers in `panel/helpers/helpers` (`isValidIpv6`,
+  `isValidCidr`, `isIpInCidr`), not with hand-rolled regexes. IPv6 syntax is
+  too easy to get subtly wrong — embedded dotted-decimal IPv4, zone IDs,
+  prefix-length bounds — and a wrong pattern fails silently.
 - **Static analysis gates**: ESLint, Prettier, and `tsc --noEmit` must pass.
   `@typescript-eslint/no-explicit-any` is off (legacy), but prefer concrete
   types for new code. Unused vars must be prefixed with `_`.
@@ -321,6 +437,22 @@ must not depend on stores or components. Helpers are pure and dependency-free.
   functions when a test would otherwise hit the network.
 - **Naming**: Mirror the source path under `__tests__/`
   (e.g. `stores/clients.ts` → `__tests__/stores/clients.test.ts`).
+- **Never repeat user-facing copy in a test.** `src/__locales/en.json` owns the
+  wording, so assert through `panel/__tests__/helpers/copy`:
+    - `copy('key', values?)` — the value a function returns (validator message,
+      store field).
+    - `copyInDom('key', values?)` — the same text as `getByText` and friends see
+      it, with whitespace collapsed (some values use a non-breaking space).
+    - `createIntlMock()` — backs `vi.mock('panel/common/intl', …)` from the base
+      locale, so components render real copy and a renamed key throws instead of
+      silently rendering the key itself.
+      Use literal strings only for fixture data (a domain, an IP address, or a
+      test-only label). `no-inline-copy.spec.ts` fails the build when a literal
+      matches a base-locale value, so this is enforced, not just requested.
+- **Assert whole-config payloads.** The backend replaces the entire TLS
+  config on every save (`POST /control/tls/configure` is PUT, not PATCH), so a
+  field missing from an expected payload is a field left behind on the server.
+  Spell the payload out in the test instead of deriving it from the defaults.
 - **E2E tests**: Playwright, configured in `playwright.config.ts`
   (`testDir: ./tests/e2e`, base URL `http://127.0.0.1:3000`). Specs run against
   a real AdGuard Home backend prepared by `scripts/prepareConfig.mjs`. E2E
@@ -359,8 +491,11 @@ vulnerabilities, supply-chain risk, and long-term maintenance cost.
 ## Configuration & Documentation
 
 - **Runtime configuration**: The dev server (`webpack.dev.js`) reads the
-  backend host/port from the root `AdguardHome.yaml` and proxies `/control`
-  requests to it. The dev server runs on `backendPort + 8000`.
+  backend host/port from the root `AdGuardHome.yaml` (gitignored, local
+  config) and proxies `/control` requests to it. The dev server runs on
+  `bind_port + 8000` (overridable via `DEV_SERVER_PORT`), NOT webpack's
+  default `8080`. The AdGuard Home instance itself is reachable at
+  `http://127.0.0.1:<bind_port>/` — commonly `3001` or `80`.
 - **Build configuration**: `BUILD_ENV` (`dev`/`prod`) is set via `cross-env`
   in npm scripts and read from `constants.js`. `BASE_URL = 'control'` is the
   API path prefix.
@@ -445,11 +580,13 @@ friendly:
 - All user-facing strings must be localized. Add new keys to the base locale
   `src/__locales/en.json`; other locales are managed externally via Twosky.
 - Locale imports are **generated** — do not hand-edit.
-  When `.twosky.json` or the set of locale JSON files changes, run:
-    ```sh
-    npm run locales:generate
-    ```
-    CI verifies freshness with `npm run locales:check`.
+  `npm run locales:generate` regenerates
+  `src/common/intl/locales.generated.ts` from the language list in
+  `.twosky.json`; it does not read translation string content. Do NOT run it
+  after editing translation strings (e.g. adding a key to `en.json`) — it is
+  only needed when `.twosky.json` changes or a locale JSON file is added or
+  removed. Use the side-effect-free `npm run locales:check` to verify
+  freshness instead.
 - Access translations via the `intl` object from `panel/common/intl`:
     - `intl.getMessage('key', values?)` — returns a plain localized string.
       Pass interpolation values as the second argument, referenced inside the
@@ -470,6 +607,17 @@ friendly:
   template literals, or concatenation (e.g. `getMessage(\`btn\_\${action}\`)`).
   Dynamic keys cannot be statically detected, so the translation tooling will
   not pick them up and the strings will go untranslated.
+- **Translate while rendering, never at module load.** `getMessage`/`getPlural`
+  track the language signal, but a call at module scope — or in a plain `const`
+  in a component body, which SolidJS runs once per mount — happens outside any
+  tracked scope, so the string keeps whichever language was active when it ran.
+  Resolve the translation where it is rendered: inline in JSX, by reading a
+  `createMemo` in the JSX expression (`<For each={items()}>`,
+  `options={options()}`), or by calling a per-render accessor
+  (`label: () => intl.getMessage('key')`, rendered as `config.label()` — see
+  `DnsSettings/Cache/blocks/CacheInputDialog.tsx`). `For`'s row mapper runs
+  untracked, so only its `each` expression is reactive: a value read inside the
+  row body must be resolved at the JSX read site, not in the mapper.
 - Do not add duplicate keys to any locale file.
 - Run `npm run translations:check` after adding or editing translation keys.
 - Every `aria-*` string must have its own dedicated translation key.

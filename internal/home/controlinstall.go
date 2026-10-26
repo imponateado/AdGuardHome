@@ -438,7 +438,9 @@ func shutdownSrv3(ctx context.Context, l *slog.Logger, srv *http3.Server) {
 // PasswordMinRunes is the minimum length of user's password in runes.
 const PasswordMinRunes = 8
 
-// Apply new configuration, start DNS server, restart Web server
+// handleInstallConfigure handles the installation configuration request.  It
+// validates the request and then finalizes the installation by applying the
+// provided settings.
 func (web *webAPI) handleInstallConfigure(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	l := web.logger
@@ -538,7 +540,7 @@ func (web *webAPI) finalizeInstall(
 	err = config.write(
 		ctx,
 		web.logger,
-		web.tlsConfProvider.ExtendedTLSConfig(),
+		web.tlsManager.ExtendedTLSConfig(),
 		web.auth,
 		web.conf.workDir,
 		web.conf.confPath,
@@ -623,7 +625,8 @@ func decodeApplyConfigReq(r io.Reader) (req *applyConfigReq, restartHTTP bool, e
 	return req, restartHTTP, err
 }
 
-// startMods initializes and starts the DNS server after installation.
+// startMods initializes the DNS and DoH servers and starts the DNS one after
+// installation.
 func (web *webAPI) startMods(ctx context.Context) (err error) {
 	statsDir, querylogDir, err := checkStatsAndQuerylogDirs(config, web.conf.workDir)
 	if err != nil {
@@ -634,26 +637,29 @@ func (web *webAPI) startMods(ctx context.Context) (err error) {
 	err = initDNS(
 		ctx,
 		web.baseLogger,
-		web.tlsConfProvider,
+		web.tlsManager,
 		web.confModifier,
 		web.httpReg,
 		statsDir,
 		querylogDir,
 		web.hostsContainer,
-		web.conf.mux,
 	)
 	if err != nil {
 		// Don't wrap the error, because it's informative enough as is.
 		return err
 	}
 
-	err = web.tlsManager.Start(ctx)
-	if err != nil {
-		// Should never happen.
-		return err
-	}
+	// The web server is already serving requests during the installation, so
+	// set the DoH server before starting the DNS one to avoid a window where
+	// DoH requests are answered by the authentication middleware.
+	doHSrv := newDoHServer(&doHServerConfig{
+		handler: globalContext.dnsServer,
+		logger:  web.baseLogger.With(slogutil.KeyPrefix, "doh_server"),
+		routes:  config.HTTPConfig.DoH.Routes,
+	})
+	web.setDoHServer(doHSrv)
 
-	err = startDNSServer()
+	err = startDNSServer(ctx)
 	if err != nil {
 		closeDNSServer(ctx, web.baseLogger)
 

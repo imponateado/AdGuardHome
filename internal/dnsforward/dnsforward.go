@@ -21,6 +21,7 @@ import (
 	"github.com/AdguardTeam/AdGuardHome/internal/aghslog"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghtls"
 	"github.com/AdguardTeam/AdGuardHome/internal/client"
+	"github.com/AdguardTeam/AdGuardHome/internal/configmgr"
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
 	"github.com/AdguardTeam/AdGuardHome/internal/querylog"
 	"github.com/AdguardTeam/AdGuardHome/internal/rdns"
@@ -32,6 +33,7 @@ import (
 	"github.com/AdguardTeam/golibs/netutil"
 	"github.com/AdguardTeam/golibs/netutil/sysresolv"
 	"github.com/AdguardTeam/golibs/stringutil"
+	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/miekg/dns"
 )
 
@@ -125,9 +127,9 @@ type Server struct {
 	// PTR resolving.
 	sysResolvers SystemResolvers
 
-	// tlsConfigProvider provides TLS configuration for the server.  It must not
+	// tlsManager provides TLS configuration for the server.  It must not
 	// be nil.
-	tlsConfigProvider aghtls.TLSConfigProvider
+	tlsManager aghtls.Manager
 
 	// access drops disallowed clients.
 	access *accessManager
@@ -196,17 +198,20 @@ const defaultLocalDomainSuffix = "lan"
 
 // DNSCreateParams are parameters to create a new server.
 type DNSCreateParams struct {
-	DNSFilter   *filtering.DNSFilter
-	Stats       stats.Interface
-	QueryLog    querylog.QueryLog
-	DHCPServer  DHCP
-	PrivateNets netutil.SubnetSet
-	Anonymizer  *aghnet.IPMut
-	EtcHosts    *aghnet.HostsContainer
+	DNSFilter  *filtering.DNSFilter
+	Stats      stats.Interface
+	QueryLog   querylog.QueryLog
+	DHCPServer DHCP
 
-	// TLSConfigProvider provides a TLS configuration for the server.  It must
+	// PrivateNets contains the private network subnets.  It must not be nil.
+	PrivateNets netutil.SubnetSet
+
+	Anonymizer *aghnet.IPMut
+	EtcHosts   *aghnet.HostsContainer
+
+	// TLSManager provides a TLS configuration for the server.  It must
 	// not be nil.
-	TLSConfigProvider aghtls.TLSConfigProvider
+	TLSManager aghtls.Manager
 
 	// Logger is used as a base logger.  It must not be nil.
 	Logger *slog.Logger
@@ -256,7 +261,7 @@ func NewServer(p DNSCreateParams) (s *Server, err error) {
 		conf: ServerConfig{
 			ServePlainDNS: true,
 		},
-		tlsConfigProvider: p.TLSConfigProvider,
+		tlsManager: p.TLSManager,
 	}
 
 	s.sysResolvers, err = sysresolv.NewSystemResolvers(nil, defaultPlainDNSPort)
@@ -292,29 +297,57 @@ func (s *Server) Close(ctx context.Context) {
 	}
 }
 
-// WriteDiskConfig - write configuration
-func (s *Server) WriteDiskConfig(c *Config) {
+// WriteDiskConfig puts the Server's configuration to the dc.  dc must not be
+// nil.
+func (s *Server) WriteDiskConfig(dc *configmgr.DNSConfig) {
 	s.serverLock.RLock()
 	defer s.serverLock.RUnlock()
 
 	sc := s.conf.Config
-	*c = sc
-	c.RatelimitWhitelist = slices.Clone(sc.RatelimitWhitelist)
-	c.BootstrapDNS = slices.Clone(sc.BootstrapDNS)
-	c.FallbackDNS = slices.Clone(sc.FallbackDNS)
-	c.AllowedClients = slices.Clone(sc.AllowedClients)
-	c.DisallowedClients = slices.Clone(sc.DisallowedClients)
-	c.BlockedHosts = slices.Clone(sc.BlockedHosts)
-	c.TrustedProxies = slices.Clone(sc.TrustedProxies)
-	c.UpstreamDNS = slices.Clone(sc.UpstreamDNS)
-}
 
-// LocalPTRResolvers returns the current local PTR resolver configuration.
-func (s *Server) LocalPTRResolvers() (localPTRResolvers []string) {
-	s.serverLock.RLock()
-	defer s.serverLock.RUnlock()
+	dc.EDNSClientSubnet = &configmgr.EDNSClientSubnet{
+		CustomIP:  sc.EDNSClientSubnet.CustomIP,
+		Enabled:   sc.EDNSClientSubnet.Enabled,
+		UseCustom: sc.EDNSClientSubnet.UseCustom,
+	}
 
-	return slices.Clone(s.conf.LocalPTRResolvers)
+	dc.IpsetListFileName = sc.IpsetListFileName
+	dc.UpstreamDNSFileName = sc.UpstreamDNSFileName
+	dc.UpstreamMode = sc.UpstreamMode
+
+	dc.RatelimitWhitelist = slices.Clone(sc.RatelimitWhitelist)
+	dc.TrustedProxies = slices.Clone(sc.TrustedProxies)
+	dc.AllowedClients = slices.Clone(sc.AllowedClients)
+	dc.BlockedHosts = slices.Clone(sc.BlockedHosts)
+	dc.BogusNXDomain = slices.Clone(sc.BogusNXDomain)
+	dc.BootstrapDNS = slices.Clone(sc.BootstrapDNS)
+	dc.DisallowedClients = slices.Clone(sc.DisallowedClients)
+	dc.FallbackDNS = slices.Clone(sc.FallbackDNS)
+	dc.IpsetList = slices.Clone(sc.IpsetList)
+	dc.PrivateRDNSResolvers = slices.Clone(s.conf.LocalPTRResolvers)
+	dc.UpstreamDNS = slices.Clone(sc.UpstreamDNS)
+
+	dc.CacheOptimisticAnswerTTL = sc.CacheOptimisticAnswerTTL
+	dc.CacheOptimisticMaxAge = sc.CacheOptimisticMaxAge
+	dc.FastestTimeout = sc.FastestTimeout
+	dc.UpstreamTimeout = timeutil.Duration(s.conf.UpstreamTimeout)
+
+	dc.MaxGoroutines = sc.MaxGoroutines
+	dc.RatelimitSubnetLenIPv4 = sc.RatelimitSubnetLenIPv4
+	dc.RatelimitSubnetLenIPv6 = sc.RatelimitSubnetLenIPv6
+	dc.CacheSize = sc.CacheSize
+	dc.CacheMinTTL = sc.CacheMinTTL
+	dc.CacheMaxTTL = sc.CacheMaxTTL
+	dc.Ratelimit = sc.Ratelimit
+
+	dc.AAAADisabled = sc.AAAADisabled
+	dc.BootstrapPreferIPv6 = sc.BootstrapPreferIPv6
+	dc.CacheEnabled = sc.CacheEnabled
+	dc.CacheOptimistic = sc.CacheOptimistic
+	dc.EnableDNSSEC = sc.EnableDNSSEC
+	dc.HandleDDR = sc.HandleDDR
+	dc.RefuseAny = sc.RefuseAny
+	dc.UsePrivateRDNS = s.conf.UsePrivateRDNS
 }
 
 // AddrProcConfig returns the current address processing configuration.  Only
@@ -328,14 +361,6 @@ func (s *Server) AddrProcConfig() (c *client.DefaultAddrProcConfig) {
 		UseRDNS:        s.conf.AddrProcConf.UseRDNS,
 		UseWHOIS:       s.conf.AddrProcConf.UseWHOIS,
 	}
-}
-
-// UpstreamTimeout returns the current upstream timeout configuration.
-func (s *Server) UpstreamTimeout() (t time.Duration) {
-	s.serverLock.RLock()
-	defer s.serverLock.RUnlock()
-
-	return s.conf.UpstreamTimeout
 }
 
 // Resolve gets IP addresses by host name from an upstream server.  No
@@ -377,11 +402,9 @@ func (s *Server) Exchange(
 
 	arpa = dns.Fqdn(arpa)
 	req := &dns.Msg{
-		MsgHdr: dns.MsgHdr{
-			Id:               dns.Id(),
-			RecursionDesired: true,
-		},
-		Compress: true,
+		Id:               dns.Id(),
+		RecursionDesired: true,
+		Compress:         true,
 		Question: []dns.Question{{
 			Name:   arpa,
 			Qtype:  dns.TypePTR,
@@ -560,7 +583,7 @@ func (s *Server) prepareUpstreamSettings(ctx context.Context, boot upstream.Reso
 		// See [aghtls.SystemRootCAs].
 		//
 		// TODO(a.garipov): Investigate if that's true.
-		RootCAs:      s.conf.TLSv12Roots,
+		RootCAs:      s.tlsManager.RootCAs(),
 		CipherSuites: s.conf.TLSCiphers,
 	})
 	if err != nil {
@@ -641,7 +664,7 @@ func (s *Server) prepareInternalDNS(ctx context.Context) (err error) {
 	}
 
 	ipsetLogger := s.baseLogger.With(slogutil.KeyPrefix, "ipset")
-	s.ipset, err = newIpsetHandler(context.TODO(), ipsetLogger, ipsetList)
+	s.ipset, err = newIpsetHandler(ctx, ipsetLogger, ipsetList)
 	if err != nil {
 		// Don't wrap the error, because it's informative enough as is.
 		return err
@@ -767,11 +790,8 @@ func (s *Server) prepareInternalProxy() (err error) {
 		UsePrivateRDNS:            srvConf.UsePrivateRDNS,
 		PrivateSubnets:            s.privateNets,
 		MessageConstructor:        s,
-	}
-
-	err = setProxyUpstreamMode(conf, srvConf.UpstreamMode, time.Duration(srvConf.FastestTimeout))
-	if err != nil {
-		return fmt.Errorf("invalid upstream mode: %w", err)
+		UpstreamMode:              srvConf.UpstreamMode,
+		FastestPingTimeout:        time.Duration(srvConf.FastestTimeout),
 	}
 
 	s.internalProxy, err = proxy.New(conf)

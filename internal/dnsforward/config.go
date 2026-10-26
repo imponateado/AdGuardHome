@@ -3,7 +3,6 @@ package dnsforward
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net"
@@ -78,7 +77,7 @@ type Config struct {
 	FallbackDNS []string `yaml:"fallback_dns"`
 
 	// UpstreamMode determines the logic through which upstreams will be used.
-	UpstreamMode UpstreamMode `yaml:"upstream_mode"`
+	UpstreamMode proxy.UpstreamMode `yaml:"upstream_mode"`
 
 	// FastestTimeout replaces the default timeout for dialing IP addresses
 	// when FastestAddr is true.
@@ -143,7 +142,8 @@ type Config struct {
 	// upstream requests.
 	EnableDNSSEC bool `yaml:"enable_dnssec"`
 
-	// EDNSClientSubnet is the settings list for EDNS Client Subnet.
+	// EDNSClientSubnet is the settings list for EDNS Client Subnet.  It must
+	// not be nil.
 	EDNSClientSubnet *EDNSClientSubnet `yaml:"edns_client_subnet"`
 
 	// MaxGoroutines is the max number of parallel goroutines for processing
@@ -269,8 +269,6 @@ type ServerConfig struct {
 	// UpstreamTimeout is the timeout for querying upstream servers.
 	UpstreamTimeout time.Duration
 
-	TLSv12Roots *x509.CertPool // list of root CAs for TLSv1.2
-
 	// TLSCiphers are the IDs of TLS cipher suites to use.
 	TLSCiphers []uint16
 
@@ -309,18 +307,6 @@ type ServerConfig struct {
 	// to upstreams along with the original one.
 	PendingRequestsEnabled bool
 }
-
-// UpstreamMode is a enumeration of upstream mode representations.  See
-// [proxy.UpstreamModeType].
-//
-// TODO(d.kolyshev): Consider using [proxy.UpstreamMode].
-type UpstreamMode string
-
-const (
-	UpstreamModeLoadBalance UpstreamMode = "load_balance"
-	UpstreamModeParallel    UpstreamMode = "parallel"
-	UpstreamModeFastestAddr UpstreamMode = "fastest_addr"
-)
 
 // newProxyConfig creates and validates configuration for the main proxy.
 // s.serverLock must be locked.
@@ -364,18 +350,15 @@ func (s *Server) newProxyConfig(ctx context.Context) (conf *proxy.Config, err er
 		PendingRequests: &proxy.PendingRequestsConfig{
 			Enabled: srvConf.PendingRequestsEnabled,
 		},
-		HTTPConfig:    httpConf,
-		DNSSECEnabled: srvConf.EnableDNSSEC,
+		HTTPConfig:         httpConf,
+		UpstreamMode:       srvConf.UpstreamMode,
+		DNSSECEnabled:      srvConf.EnableDNSSEC,
+		FastestPingTimeout: time.Duration(srvConf.FastestTimeout),
 	}
 
 	if srvConf.EDNSClientSubnet.UseCustom {
 		// TODO(s.chzhen):  Use netip.Addr instead of net.IP inside dnsproxy.
 		conf.EDNSAddr = net.IP(srvConf.EDNSClientSubnet.CustomIP.AsSlice())
-	}
-
-	err = setProxyUpstreamMode(conf, srvConf.UpstreamMode, time.Duration(srvConf.FastestTimeout))
-	if err != nil {
-		return nil, fmt.Errorf("upstream mode: %w", err)
 	}
 
 	conf.BogusNXDomain, err = parseBogusNXDOMAIN(srvConf.BogusNXDomain)
@@ -407,19 +390,27 @@ func (s *Server) newProxyConfig(ctx context.Context) (conf *proxy.Config, err er
 
 // newRatelimitMw returns the ratelimit middleware.  In case of invalid
 // ratelimit configuration returns an error. l must not be nil.
-func newRatelimitMw(
-	l *slog.Logger,
-	conf ServerConfig,
-) (mw proxy.Middleware, err error) {
+func newRatelimitMw(l *slog.Logger, conf ServerConfig) (mw proxy.Middleware, err error) {
 	if conf.Ratelimit == 0 {
 		return proxy.MiddlewareFunc(proxy.PassThrough), nil
 	}
 
+	allowListAddrs := make(netutil.SliceSubnetSet, 0, len(conf.RatelimitWhitelist))
+	for i, s := range conf.RatelimitWhitelist {
+		if !s.IsValid() {
+			return nil, fmt.Errorf("ratelimit: whitelist: at index %d: invalid ip", i)
+		}
+
+		s = s.Unmap()
+		allowListAddrs = append(allowListAddrs, netip.PrefixFrom(s, s.BitLen()))
+	}
+
 	rlConf := &ratelimit.Config{
-		Logger:        l.With(slogutil.KeyPrefix, "ratelimit"),
-		Ratelimit:     uint(conf.Ratelimit),
-		SubnetLenIPv4: conf.RatelimitSubnetLenIPv4,
-		SubnetLenIPv6: conf.RatelimitSubnetLenIPv6,
+		Logger:         l.With(slogutil.KeyPrefix, "ratelimit"),
+		Ratelimit:      uint(conf.Ratelimit),
+		SubnetLenIPv4:  conf.RatelimitSubnetLenIPv4,
+		SubnetLenIPv6:  conf.RatelimitSubnetLenIPv6,
+		AllowlistAddrs: allowListAddrs,
 	}
 	if err = rlConf.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -714,7 +705,7 @@ func (s *Server) prepareTLS(ctx context.Context, proxyConf *proxy.Config) {
 	proxyConf.TLSListenAddr = s.conf.TLSConf.TLSListenAddrs
 	proxyConf.QUICListenAddr = s.conf.TLSConf.QUICListenAddrs
 
-	proxyConf.TLSConfig = s.tlsConfigProvider.TLSConfig()
+	proxyConf.TLSConfig = s.tlsManager.TLSConfig()
 	if proxyConf.TLSConfig == nil {
 		s.logger.WarnContext(ctx, "tls configuration is not set")
 

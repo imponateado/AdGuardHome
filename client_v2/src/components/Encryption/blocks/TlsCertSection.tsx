@@ -1,31 +1,32 @@
-import { Show } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import { Icon } from 'panel/common/ui/Icon';
+import { ConfirmDialog } from 'panel/common/ui/ConfirmDialog';
 import intl from 'panel/common/intl';
 import {
     encryptionState,
     setTlsConfig,
     resetValidationStatus,
-    clearCertOptimistically,
+    applyTlsOptimistically,
 } from 'panel/stores/encryption';
-import { CertificateStatus, KeyStatus, ValidationStatus } from '../Status';
+import { dashboardState } from 'panel/stores/dashboard';
+import { STANDARD_WEB_PORT } from 'panel/helpers/constants';
+import { CertificateStatus, ValidationStatus } from '../Status';
+import { defaultTlsValues, getSubmitValues } from './helpers';
 import s from '../styles.module.pcss';
 import theme from 'panel/lib/theme';
 
 export const TlsCertSection = () => {
+    const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+
     const enc = () => encryptionState;
 
-    const removeCert = () => {
-        clearCertOptimistically();
+    const handleRemoveCert = () => {
+        const values = getSubmitValues(defaultTlsValues);
+
+        applyTlsOptimistically(values);
         resetValidationStatus();
-        setTlsConfig({
-            enabled: false,
-            serve_plain_dns: true,
-            certificate_chain: '',
-            private_key: '',
-            certificate_path: '',
-            private_key_path: '',
-            private_key_saved: false,
-        });
+        setTlsConfig(values);
+        setShowDeleteConfirm(false);
     };
 
     const renderStatus = () => {
@@ -48,19 +49,15 @@ export const TlsCertSection = () => {
         }
         if (!enc().certificate_chain && !enc().certificate_path) return null;
         return (
-            <>
-                <CertificateStatus
-                    validChain={enc().valid_chain}
-                    validCert={enc().valid_cert}
-                    subject={enc().subject}
-                    issuer={enc().issuer}
-                    notAfter={enc().not_after}
-                    dnsNames={enc().dns_names}
-                />
-                <Show when={enc().private_key || enc().private_key_path}>
-                    <KeyStatus validKey={enc().valid_key} keyType={enc().key_type} />
-                </Show>
-            </>
+            <CertificateStatus
+                validChain={enc().valid_chain}
+                validCert={enc().valid_cert}
+                subject={enc().subject}
+                issuer={enc().issuer}
+                notAfter={enc().not_after}
+                dnsNames={enc().dns_names}
+                keyType={enc().valid_key ? enc().key_type : undefined}
+            />
         );
     };
 
@@ -71,13 +68,29 @@ export const TlsCertSection = () => {
                 <button
                     type="button"
                     class={theme.form.action}
-                    onClick={removeCert}
+                    onClick={() => setShowDeleteConfirm(true)}
                     aria-label={intl.getMessage('encryption_certificates')}
+                    data-testid="tls-cert-remove"
                 >
                     <Icon icon="delete" color="red" />
                 </button>
             </div>
             {renderStatus()}
+
+            <Show when={showDeleteConfirm()}>
+                <ConfirmDialog
+                    title={intl.getMessage('remove_tls_certificate')}
+                    text={intl.getMessage('remove_tls_certificate_desc', {
+                        host: window.location.hostname,
+                        port: Number(dashboardState.httpPort) || STANDARD_WEB_PORT,
+                    })}
+                    buttonText={intl.getMessage('yes_remove')}
+                    cancelText={intl.getMessage('cancel')}
+                    buttonVariant="danger"
+                    onConfirm={handleRemoveCert}
+                    onClose={() => setShowDeleteConfirm(false)}
+                />
+            </Show>
         </div>
     );
 };

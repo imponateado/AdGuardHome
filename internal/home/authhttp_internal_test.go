@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AdguardTeam/AdGuardHome/internal/agh"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghhttp"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghtls"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghuser"
@@ -209,7 +208,6 @@ func TestAuthMiddlewareDefault(t *testing.T) {
 
 	mw := newAuthMiddlewareDefault(&authMiddlewareDefaultConfig{
 		logger:      testLogger,
-		mux:         http.NewServeMux(),
 		rateLimiter: emptyRateLimiter{},
 		sessions:    ts,
 		users:       usersDB,
@@ -294,12 +292,7 @@ func TestAuthMiddlewareDefault(t *testing.T) {
 func TestAuthMiddlewareDefault_public(t *testing.T) {
 	t.Parallel()
 
-	const (
-		login = aghuser.Login(testUsername)
-
-		dohPath    = "/dns-query"
-		doHPattern = http.MethodGet + " " + dohPath
-	)
+	const login = aghuser.Login(testUsername)
 
 	user := newTestUser(t, testPassword, login)
 	usersDB := newTestUsersDB()
@@ -307,16 +300,11 @@ func TestAuthMiddlewareDefault_public(t *testing.T) {
 		return []*aghuser.User{user}, nil
 	}
 
-	mux := http.NewServeMux()
-	mux.Handle(doHPattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
-
 	mw := newAuthMiddlewareDefault(&authMiddlewareDefaultConfig{
 		logger:      testLogger,
-		mux:         mux,
 		rateLimiter: emptyRateLimiter{},
 		sessions:    newTestSessionStorage(),
 		users:       usersDB,
-		doHRoutes:   []string{doHPattern},
 	})
 
 	testCases := []struct {
@@ -339,14 +327,6 @@ func TestAuthMiddlewareDefault_public(t *testing.T) {
 		req:      httptest.NewRequest(http.MethodGet, "/apple/doh.mobileconfig", nil),
 		name:     "public_doh_config",
 		wantCode: http.StatusOK,
-	}, {
-		req:      httptest.NewRequest(http.MethodGet, dohPath, nil),
-		name:     "public_doh",
-		wantCode: http.StatusOK,
-	}, {
-		req:      httptest.NewRequest(http.MethodPost, dohPath, nil),
-		name:     "public_doh_invalid",
-		wantCode: http.StatusUnauthorized,
 	}}
 
 	for _, tc := range testCases {
@@ -402,10 +382,8 @@ func TestAuth_ServeHTTP_firstRun(t *testing.T) {
 	httpReg := aghhttp.NewDefaultRegistrar(mux, mw.wrap)
 
 	ctx := testutil.ContextWithTimeout(t, testTimeout)
-	m, err := newTLSManager(ctx, &tlsManagerConfig{
-		logger:       testLogger,
-		confModifier: agh.EmptyConfigModifier{},
-		manager:      aghtls.EmptyManager{},
+	m, err := aghtls.NewDefaultManager(ctx, &aghtls.DefaultManagerConfig{
+		Logger: testLogger,
 	})
 	require.NoError(t, err)
 
@@ -538,16 +516,14 @@ func TestAuth_ServeHTTP_auth(t *testing.T) {
 	baseMux := http.NewServeMux()
 	httpReg := aghhttp.NewDefaultRegistrar(baseMux, mw.wrap)
 
-	tlsMgr, err := newTLSManager(testutil.ContextWithTimeout(t, testTimeout), &tlsManagerConfig{
-		logger:       testLogger,
-		confModifier: agh.EmptyConfigModifier{},
-		manager:      aghtls.EmptyManager{},
+	ctx := testutil.ContextWithTimeout(t, testTimeout)
+	m, err := aghtls.NewDefaultManager(ctx, &aghtls.DefaultManagerConfig{
+		Logger: testLogger,
 	})
 	require.NoError(t, err)
 
 	auth, err := newAuth(testutil.ContextWithTimeout(t, testTimeout), &authConfig{
 		baseLogger:      testLogger,
-		mux:             baseMux,
 		rateLimiter:     emptyRateLimiter{},
 		trustedProxies:  testTrustedProxies,
 		gliNetTokenRoot: gliNetRoot,
@@ -561,7 +537,7 @@ func TestAuth_ServeHTTP_auth(t *testing.T) {
 	t.Cleanup(func() { auth.close(testutil.ContextWithTimeout(t, testTimeout)) })
 
 	web := newTestWeb(t, &webConfig{
-		tlsManager: tlsMgr,
+		tlsManager: m,
 		auth:       auth,
 		mux:        baseMux,
 		httpReg:    httpReg,
@@ -710,7 +686,6 @@ func TestAuth_ServeHTTP_logout(t *testing.T) {
 
 	auth, err := newAuth(testutil.ContextWithTimeout(t, testTimeout), &authConfig{
 		baseLogger:     testLogger,
-		mux:            baseMux,
 		rateLimiter:    emptyRateLimiter{},
 		trustedProxies: testTrustedProxies,
 		dbFilename:     sessionsDB,
@@ -723,10 +698,8 @@ func TestAuth_ServeHTTP_logout(t *testing.T) {
 	t.Cleanup(func() { auth.close(testutil.ContextWithTimeout(t, testTimeout)) })
 
 	ctx := testutil.ContextWithTimeout(t, testTimeout)
-	m, err := newTLSManager(ctx, &tlsManagerConfig{
-		logger:       testLogger,
-		confModifier: agh.EmptyConfigModifier{},
-		manager:      aghtls.EmptyManager{},
+	m, err := aghtls.NewDefaultManager(ctx, &aghtls.DefaultManagerConfig{
+		Logger: testLogger,
 	})
 	require.NoError(t, err)
 

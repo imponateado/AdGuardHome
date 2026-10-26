@@ -9,14 +9,81 @@ The format is based on [*Keep a Changelog*](https://keepachangelog.com/en/1.0.0/
 <!--
 ## [v1.0.0] – TBA
 
-## [v0.107.78] - 2026-06-15 (APPROX.)
+## [v0.107.80] - 2026-09-03 (APPROX.)
 
-See also the [v0.107.79 GitHub milestone][ms-v0.107.79].
+See also the [v0.107.80 GitHub milestone][ms-v0.107.80].
 
-[ms-v0.107.79]: https://github.com/AdguardTeam/AdGuardHome/milestone/114?closed=1
+[ms-v0.107.80]: https://github.com/AdguardTeam/AdGuardHome/milestone/115?closed=1
 
 NOTE: Add new changes BELOW THIS COMMENT.
 -->
+
+### Security
+
+- Go version has been updated to prevent the possibility of exploiting the Go vulnerabilities fixed in [1.27.2][go-1.27.2].
+
+### Fixed
+
+- Incorrect behaviour on the first launch with the `--check-config` flag.
+
+- Reading partially received TCP prefix.
+
+- A panic when updating AdGuard Home binary via the command line with `use_private_ptr_resolvers` set to true ([#8613]).
+
+- `log.enabled` set to `false` leaving the legacy logger enabled ([#8565]).
+
+- DHCP server persisting uncommitted leases with zero expiry after `DHCPDISCOVER` messages ([#8572]).
+
+- DHCPv4 settings not being saved when an IPv6-capable interface is selected and DHCPv6 is not configured ([#8608]).
+
+- DHCP not being enabled when only the DHCPv6 section is configured.
+
+- DHCP IPv4 range subnet validation not working ([#8609]).
+
+- Client ID validation rejecting valid IPv6 CIDRs with an embedded dotted-decimal IPv4 address ([#8610]).
+
+- Client ID validation accepting IPv4 addresses with leading-zero octets (`192.168.01.1`), malformed MAC addresses, and ClientIDs with leading or trailing hyphens.
+
+- IP addresses being sorted lexicographically instead of numerically in the web interface ([#8636]).
+
+- Invalid secondary bootstrap resolver IPv4 address ([#8637]).
+
+- The *Server addresses* dialog overflowing horizontally when a long value is entered. Long unbreakable values in the settings rows overflowing the page.
+
+- Encrypted DNS server addresses not appearing in the Setup Guide until the page was reloaded after enabling encryption.
+
+- Passwords containing emoji being rejected by the first-run setup wizard in the new web interface.
+
+- Cache size and TTL override rows being locked while the DNS cache was disabled in the new web interface ([#8644]).
+
+- Tables staying on an empty page after the last row of that page was deleted in the new web interface ([#8644]).
+
+- The *Log out* button opening the login page in a new tab in the new web interface ([#8661]).
+
+### Removed
+
+- The support for macOS 13 Ventura, see [Go 1.27 release notes][go-1.27-notes].
+
+[#8565]:           https://github.com/AdguardTeam/AdGuardHome/issues/8565
+[#8572]:           https://github.com/AdguardTeam/AdGuardHome/issues/8572
+[#8608]:           https://github.com/AdguardTeam/AdGuardHome/issues/8608
+[#8609]:           https://github.com/AdguardTeam/AdGuardHome/issues/8609
+[#8610]:           https://github.com/AdguardTeam/AdGuardHome/issues/8610
+[#8613]:           https://github.com/AdguardTeam/AdGuardHome/issues/8613
+[#8636]:           https://github.com/AdguardTeam/AdGuardHome/issues/8636
+[#8637]:           https://github.com/AdguardTeam/AdGuardHome/issues/8637
+[#8644]:           https://github.com/AdguardTeam/AdGuardHome/issues/8644
+[#8661]:           https://github.com/AdguardTeam/AdGuardHome/issues/8661
+[go-1.27.2]:       https://groups.google.com/g/golang-announce/c/U2fTuyDJznI
+[go-1.27-notes]:   https://go.dev/doc/go1.27#darwin
+
+<!--
+NOTE: Add new changes ABOVE THIS COMMENT.
+-->
+
+## [v0.107.79] - 2026-08-18
+
+See also the [v0.107.79 GitHub milestone][ms-v0.107.79].
 
 ### Security
 
@@ -48,13 +115,11 @@ NOTE: Add new changes BELOW THIS COMMENT.
 
 - Blocked requests without an EDNS(0) OPT record ([#8183]).
 
+[#7514]:     https://github.com/AdguardTeam/AdGuardHome/issues/7514
+[#8183]:     https://github.com/AdguardTeam/AdGuardHome/issues/8183
 [go-1.26.6]: https://groups.google.com/g/golang-announce/c/94pEornpRlI
-[#7514]: https://github.com/AdguardTeam/AdGuardHome/issues/7514
-[#8183]: https://github.com/AdguardTeam/AdGuardHome/issues/8183
 
-<!--
-NOTE: Add new changes ABOVE THIS COMMENT.
--->
+[ms-v0.107.79]: https://github.com/AdguardTeam/AdGuardHome/milestone/114?closed=1
 
 ## [v0.107.78] - 2026-07-13
 
@@ -3732,11 +3797,12 @@ See also the [v0.104.2 GitHub milestone][ms-v0.104.2].
 [ms-v0.104.2]: https://github.com/AdguardTeam/AdGuardHome/milestone/28?closed=1
 
 <!--
-[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.79...HEAD
-[v0.107.79]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.78...v0.107.79
+[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.80...HEAD
+[v0.107.80]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.79...v0.107.80
 -->
 
-[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.78...HEAD
+[Unreleased]: https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.79...HEAD
+[v0.107.79]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.78...v0.107.79
 [v0.107.78]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.77...v0.107.78
 [v0.107.77]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.76...v0.107.77
 [v0.107.76]:  https://github.com/AdguardTeam/AdGuardHome/compare/v0.107.75...v0.107.76

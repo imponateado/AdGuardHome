@@ -14,7 +14,9 @@ import (
 	"github.com/AdguardTeam/AdGuardHome/internal/aghalg"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghhttp"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghnet"
+	"github.com/AdguardTeam/AdGuardHome/internal/configmgr"
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
+	"github.com/AdguardTeam/golibs/timeutil"
 )
 
 // sqliteStats implements the Interface using direct SQL queries on QueryLog DB.
@@ -59,12 +61,13 @@ func (s *sqliteStats) Update(e *Entry) {
 	// No-op: Data is inserted by QueryLog module directly.
 }
 
-func (s *sqliteStats) WriteDiskConfig(dc *Config) {
+func (s *sqliteStats) WriteDiskConfig(dc *configmgr.StatsConfig) {
 	s.confMu.RLock()
 	defer s.confMu.RUnlock()
 
-	dc.Ignored = s.ignored
-	dc.Limit = s.limit
+	dc.Ignored = s.ignored.Values()
+	dc.IgnoredEnabled = s.ignored.IsEnabled()
+	dc.Interval = timeutil.Duration(s.limit)
 	dc.Enabled = s.enabled
 }
 

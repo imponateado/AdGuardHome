@@ -1,17 +1,17 @@
 import { Show, For, createMemo } from 'solid-js';
-
-import { useIsDesktop } from 'panel/helpers/useMediaQuery';
-import { MOBILE_TABLE_MAX_ROWS } from 'panel/helpers/constants';
 import intl from 'panel/common/intl';
 import { Icon } from 'panel/common/ui/Icon';
-import { Tooltip } from 'panel/common/ui/Tooltip';
-import { formatNumber, formatCompactNumber } from 'panel/helpers/helpers';
+import { Link } from 'panel/common/ui/Link';
+import { RoutePath } from 'panel/components/Routes/Paths';
+import { formatCompactNumber } from 'panel/helpers/helpers';
 import { getTrackerData } from 'panel/helpers/trackers/trackers';
 import theme from 'panel/lib/theme';
 import cn from 'clsx';
-import { SortableTableHeader } from '../SortableTableHeader';
+import { TableHeader } from '../TableHeader';
 import { TrackerTooltip } from '../TrackerTooltip';
+import { RowTooltip } from '../RowTooltip';
 import { EmptyState } from '../EmptyState';
+import { CardFooter } from '../CardFooter';
 import { useSortedData } from '../../hooks/useSortedData';
 
 import s from '../TableCard.module.pcss';
@@ -24,19 +24,11 @@ type DomainInfo = {
 type Props = {
     topQueriedDomains: DomainInfo[];
     numDnsQueries: number;
+    period?: number;
 };
 
 export const TopQueriedDomains = (props: Props) => {
-    const isDesktop = useIsDesktop();
-    const {
-        sortedData: sortedDomains,
-        sortField,
-        sortDirection,
-        handleSort,
-    } = useSortedData(() => props.topQueriedDomains);
-    const visibleDomains = createMemo(() =>
-        isDesktop() ? sortedDomains() : sortedDomains().slice(0, MOBILE_TABLE_MAX_ROWS),
-    );
+    const { sortedData: sortedDomains, hasMore } = useSortedData(() => props.topQueriedDomains);
 
     const hasStats = createMemo(() => props.topQueriedDomains.length > 0);
 
@@ -49,18 +41,15 @@ export const TopQueriedDomains = (props: Props) => {
             </div>
 
             <Show when={hasStats()}>
-                <SortableTableHeader
+                <TableHeader
                     nameLabel={intl.getMessage('domain')}
                     countLabel={intl.getMessage('queries')}
-                    sortField={sortField()}
-                    sortDirection={sortDirection()}
-                    onSort={handleSort}
                 />
             </Show>
 
             <div class={s.tableRows}>
                 <Show when={hasStats()} fallback={<EmptyState />}>
-                    <For each={visibleDomains()}>
+                    <For each={sortedDomains()}>
                         {(domain) => {
                             const percent = createMemo(() =>
                                 props.numDnsQueries > 0
@@ -70,43 +59,46 @@ export const TopQueriedDomains = (props: Props) => {
                             const trackerData = getTrackerData(domain.name);
 
                             return (
-                                <div class={cn(s.tableRow, s.statRowValue)}>
-                                    <div
-                                        class={cn(
-                                            theme.text.t3,
-                                            theme.text.condenced,
-                                            s.tableRowLeft,
-                                        )}
+                                <RowTooltip
+                                    content={
+                                        <TrackerTooltip
+                                            domain={domain.name}
+                                            trackerData={trackerData}
+                                        />
+                                    }
+                                >
+                                    <Link
+                                        to={RoutePath.QueryLog}
+                                        query={{ search: `"${domain.name}"` }}
+                                        class={cn(s.tableRow, s.statRowValue, s.tableRowLink)}
+                                        data-testid="top-domain-row"
                                     >
-                                        <Show
-                                            when={trackerData}
-                                            fallback={<div class={s.tableRowDot} />}
+                                        <div
+                                            class={cn(
+                                                theme.text.t3,
+                                                theme.text.condenced,
+                                                s.tableRowLeft,
+                                            )}
                                         >
-                                            <Tooltip
-                                                content={
-                                                    <TrackerTooltip trackerData={trackerData!} />
-                                                }
-                                                position="bottomLeft"
+                                            <Show
+                                                when={trackerData}
+                                                fallback={<div class={s.tableRowDot} />}
                                             >
                                                 <Icon icon="eye_open" class={s.tableRowIcon} />
-                                            </Tooltip>
-                                        </Show>
-                                        <span class={s.domainName}>{domain.name}</span>
-                                    </div>
-
-                                    <div class={s.tableRowRight}>
-                                        <div class={s.dropdowWrapper}>
-                                            <Tooltip
-                                                position="top"
-                                                overlayClass={s.queryTooltipOverlay}
-                                                content={
-                                                    <div class={s.queryTooltip}>
-                                                        {intl.getMessage('queries_tooltip', {
-                                                            value: formatNumber(domain.count),
-                                                        })}
-                                                    </div>
-                                                }
+                                            </Show>
+                                            <span
+                                                class={cn(
+                                                    theme.text.t3,
+                                                    theme.text.condenced,
+                                                    s.domainNameLink,
+                                                )}
                                             >
+                                                <span class={s.domainName}>{domain.name}</span>
+                                            </span>
+                                        </div>
+
+                                        <div class={s.tableRowRight}>
+                                            <div class={s.dropdownWrapper}>
                                                 <div
                                                     class={cn(
                                                         theme.text.t3,
@@ -114,7 +106,15 @@ export const TopQueriedDomains = (props: Props) => {
                                                         s.queryCount,
                                                     )}
                                                 >
-                                                    {formatCompactNumber(domain.count)}
+                                                    <span
+                                                        class={cn(
+                                                            theme.text.t3,
+                                                            theme.text.condenced,
+                                                            s.queryCountLink,
+                                                        )}
+                                                    >
+                                                        {formatCompactNumber(domain.count)}
+                                                    </span>
 
                                                     <div
                                                         class={cn(
@@ -126,29 +126,37 @@ export const TopQueriedDomains = (props: Props) => {
                                                         ({percent().toFixed(1)}%)
                                                     </div>
                                                 </div>
-                                            </Tooltip>
+                                            </div>
+
+                                            <div class={s.queryBar}>
+                                                <div
+                                                    class={cn(s.queryBarFill)}
+                                                    style={{ width: `${percent()}%` }}
+                                                />
+                                            </div>
                                         </div>
 
                                         <div class={s.queryBar}>
                                             <div
-                                                class={cn(s.queryBarFill)}
+                                                class={s.queryBarFill}
                                                 style={{ width: `${percent()}%` }}
                                             />
                                         </div>
-                                    </div>
-
-                                    <div class={s.queryBar}>
-                                        <div
-                                            class={s.queryBarFill}
-                                            style={{ width: `${percent()}%` }}
-                                        />
-                                    </div>
-                                </div>
+                                    </Link>
+                                </RowTooltip>
                             );
                         }}
                     </For>
                 </Show>
             </div>
+
+            <Show when={hasMore()}>
+                <CardFooter
+                    to={RoutePath.TopQueriedDomains}
+                    testId="show-more-top-queried-domains"
+                    query={props.period ? { period: props.period } : undefined}
+                />
+            </Show>
         </div>
     );
 };

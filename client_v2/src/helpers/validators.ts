@@ -1,8 +1,6 @@
 import intl from 'panel/common/intl';
 import {
     MAX_PORT,
-    R_CIDR,
-    R_CIDR_IPV6,
     R_HOST,
     R_IPV4,
     R_MAC,
@@ -14,11 +12,12 @@ import {
     MIN_PASSWORD_LENGTH,
     R_HOSTNAME,
     UINT32_RANGE,
+    MAX_HOSTNAME_LENGTH,
 } from './constants';
 
 import { ip4ToInt, isValidAbsolutePath } from './form';
 
-import { isIpInCidr, isValidIpv6, parseSubnetMask } from './helpers';
+import { isIpInCidr, isValidCidr, isValidIpv6, parseSubnetMask } from './helpers';
 
 /** Return type for all validators: `undefined` means valid, string is the i18n error message. */
 type ValidationResult = string | undefined;
@@ -329,11 +328,7 @@ export const validateClientsPerLine = (value: string): string | undefined =>
     validatePerLine(
         value,
         (line) =>
-            R_IPV4.test(line) ||
-            isValidIpv6(line) ||
-            R_CIDR.test(line) ||
-            R_CIDR_IPV6.test(line) ||
-            R_CLIENT_ID.test(line),
+            R_IPV4.test(line) || isValidIpv6(line) || isValidCidr(line) || R_CLIENT_ID.test(line),
     );
 
 /**
@@ -422,27 +417,55 @@ export const validateAnswer = (value?: string): ValidationResult => {
 };
 
 /**
- * Validates that a DNS rewrite with the given domain doesn't already exist.
- * When editing, the `currentDomain` is excluded from the duplicate check.
+ * Normalizes a rewrite's domain or answer for duplicate comparison.
+ */
+const normalizeRewriteValue = (value?: string): string => (value ?? '').trim().toLowerCase();
+
+/**
+ * Validates that a fully duplicated DNS rewrite (same domain AND same answer)
+ * doesn't already exist. Rewrites that share a domain but have different
+ * answers are allowed. When editing, the rewrite being edited is excluded from
+ * the duplicate check.
  *
- * @example validateRewriteNotExists("example.com", [{ domain: "example.com" }])
+ * @example validateRewriteNotExists("example.com", "1.2.3.4", [{ domain: "example.com", answer: "5.6.7.8" }])
+ *          // undefined (same domain, different answer)
+ * @example validateRewriteNotExists("example.com", "1.2.3.4", [{ domain: "example.com", answer: "1.2.3.4" }])
  *          // "This DNS rewrite already exists"
- * @example validateRewriteNotExists("example.com", [{ domain: "example.com" }], "example.com")
- *          // undefined (editing the same rewrite)
+ * @example validateRewriteNotExists(
+ *          "example.com",
+ *          "1.2.3.4",
+ *          [{ domain: "example.com", answer: "1.2.3.4" }],
+ *          { domain: "example.com", answer: "1.2.3.4" },
+ *          ) // undefined (editing the same rewrite)
  */
 export const validateRewriteNotExists = (
     domain: string,
-    existingList: Array<{ domain: string }>,
-    currentDomain?: string,
+    answer: string,
+    existingList: Array<{ domain?: string; answer?: string }>,
+    currentRewrite?: { domain?: string; answer?: string },
 ): ValidationResult => {
-    if (!domain) {
+    if (!domain || !answer) {
         return undefined;
     }
 
-    const isDuplicate = existingList.some(
-        (item) =>
-            item.domain.toLowerCase() === domain.toLowerCase() && item.domain !== currentDomain,
-    );
+    const normalizedDomain = normalizeRewriteValue(domain);
+    const normalizedAnswer = normalizeRewriteValue(answer);
+
+    const isDuplicate = existingList.some((item) => {
+        if (
+            normalizeRewriteValue(item.domain) !== normalizedDomain ||
+            normalizeRewriteValue(item.answer) !== normalizedAnswer
+        ) {
+            return false;
+        }
+
+        const isCurrentRewrite =
+            currentRewrite !== undefined &&
+            normalizeRewriteValue(item.domain) === normalizeRewriteValue(currentRewrite.domain) &&
+            normalizeRewriteValue(item.answer) === normalizeRewriteValue(currentRewrite.answer);
+
+        return !isCurrentRewrite;
+    });
 
     if (isDuplicate) {
         return intl.getMessage('dns_rewrite_exists');
@@ -612,8 +635,7 @@ export const validateIdentifier = (
         R_IPV4.test(trimmed) ||
         isValidIpv6(trimmed) ||
         R_MAC.test(trimmed) ||
-        R_CIDR.test(trimmed) ||
-        R_CIDR_IPV6.test(trimmed) ||
+        isValidCidr(trimmed) ||
         R_CLIENT_ID.test(trimmed);
 
     if (!isValidFormat) {
@@ -651,6 +673,10 @@ const R_ALL_DIGITS = /^[0-9]+$/;
 export const validateHostname = (value?: string): ValidationResult => {
     if (!value) {
         return undefined;
+    }
+
+    if (value.length > MAX_HOSTNAME_LENGTH) {
+        return intl.getMessage('form_error_hostname_length', { max: MAX_HOSTNAME_LENGTH });
     }
 
     if (
@@ -710,6 +736,7 @@ export const validateDomainsPerLine = (value: string): string | undefined =>
 interface LeaseEntry {
     ip: string;
     mac?: string;
+    hostname?: string;
 }
 
 export const validateIpNotDuplicate =
@@ -724,14 +751,47 @@ export const validateIpNotDuplicate =
 export const validateMacNotDuplicate =
     (existingLeases: LeaseEntry[], editMac?: string): ((value?: string) => ValidationResult) =>
     (value) => {
-        if (value && value !== editMac && existingLeases.some((lease) => lease.mac === value)) {
+        if (
+            value &&
+            value.toLowerCase() !== editMac?.toLowerCase() &&
+            existingLeases.some((lease) => lease.mac?.toLowerCase() === value.toLowerCase())
+        ) {
             return intl.getMessage('dhcp_mac_address_already_added');
         }
         return undefined;
     };
 
-export const validateBetween = (value: number, min: number, max: number): string | undefined => {
-    if (value < min || value > max) {
+export const validateHostnameNotDuplicate =
+    (existingLeases: LeaseEntry[], editHostname?: string): ((value?: string) => ValidationResult) =>
+    (value) => {
+        if (
+            value &&
+            value !== editHostname &&
+            existingLeases.some(
+                (lease) => lease.hostname && lease.hostname.toLowerCase() === value.toLowerCase(),
+            )
+        ) {
+            return intl.getMessage('dhcp_hostname_already_added');
+        }
+        return undefined;
+    };
+
+/**
+ * Validates that a value is within the inclusive range.  When `integer` is
+ * true, non-integer values are rejected as well.
+ */
+export const validateBetween = (
+    value: number,
+    min: number,
+    max: number,
+    options?: { integer?: boolean },
+): string | undefined => {
+    if (
+        !Number.isFinite(value) ||
+        value < min ||
+        value > max ||
+        (options?.integer && !Number.isInteger(value))
+    ) {
         return intl.getMessage('form_value_value_from_error', {
             min_value: min.toLocaleString(),
             max_value: max.toLocaleString(),
@@ -758,6 +818,12 @@ export const validateLeaseTime = (value?: number | string): ValidationResult => 
     if (Number.isNaN(num)) {
         return intl.getMessage('form_error_required');
     }
+    if (!Number.isInteger(num)) {
+        return intl.getMessage('form_value_value_from_error', {
+            min_value: (1).toLocaleString(),
+            max_value: UINT32_RANGE.MAX.toLocaleString(),
+        });
+    }
     return validateBetween(num, 1, UINT32_RANGE.MAX);
 };
 
@@ -771,24 +837,27 @@ export const validateMinValue = (value: number, min: number): string | undefined
 };
 
 /**
- * Validates the client DNS cache size.
- * Callers should gate on `upstreams_cache_enabled` before invoking.
- * Returns undefined if valid, or an i18n error message string if invalid.
+ * Validates a DNS cache size.  The value is only checked when `enabled` is
+ * true: it must be greater than zero and within the uint32 range.
+ *
+ * Used for both the per-client upstream cache and the global DNS cache.
  *
  * @param size - The cache size in bytes
- * @param enabled - Whether per-client upstream caching is enabled
+ * @param enabled - Whether the cache the size belongs to is enabled
  *
- * @example validateCacheSize(0, true)         // error ("must be greater than zero")
- * @example validateCacheSize(1000, true)      // undefined (valid)
+ * @example validateCacheSize(0, true)          // error ("must be greater than zero")
+ * @example validateCacheSize('', true)         // error ("must be greater than zero")
+ * @example validateCacheSize(1000, true)       // undefined (valid)
  * @example validateCacheSize(4294967296, true) // error (exceeds UINT32_MAX)
- * @example validateCacheSize(0, false)        // undefined (no validation when disabled)
+ * @example validateCacheSize(0, false)         // undefined (no validation when disabled)
  */
-export const validateCacheSize = (size: number, enabled: boolean): ValidationResult => {
+export const validateCacheSize = (size: number | string, enabled: boolean): ValidationResult => {
     if (!enabled) {
         return undefined;
     }
-    if (size === 0) {
+    const num = Number(size);
+    if (Number.isNaN(num) || num === 0) {
         return intl.getMessage('cache_config_size_validation');
     }
-    return validateBetween(size, 1, UINT32_RANGE.MAX);
+    return validateBetween(num, 1, UINT32_RANGE.MAX, { integer: true });
 };

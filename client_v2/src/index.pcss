@@ -10,6 +10,10 @@
         Rubik, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
 }
 
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
 *,
 *::after,
 *::before {
@@ -50,4 +54,9 @@ h4,
 h5,
 h6 {
     margin: 0;
+}
+
+::selection {
+    background-color: var(--selected-background);
+    color: var(--default-main-text);
 }

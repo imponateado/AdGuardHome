@@ -22,6 +22,7 @@ import type { FilterConfig } from 'panel/api/model/filterConfig';
 type FilteringState = {
     isModalOpen: boolean;
     processingFilters: boolean;
+    filtersInitialized: boolean;
     processingRules: boolean;
     processingAddFilter: boolean;
     processingRefreshFilters: boolean;
@@ -45,6 +46,7 @@ type FilteringState = {
 const initialState: FilteringState = {
     isModalOpen: false,
     processingFilters: false,
+    filtersInitialized: false,
     processingRules: false,
     processingAddFilter: false,
     processingRefreshFilters: false,
@@ -74,10 +76,11 @@ export const getFilteringStatus = async () => {
         setState({
             ...normalizeFilteringStatus(data),
             processingFilters: false,
+            filtersInitialized: true,
         });
     } catch (error) {
         addErrorToast({ error });
-        setState('processingFilters', false);
+        setState({ processingFilters: false, filtersInitialized: true });
     }
 };
 
@@ -321,6 +324,38 @@ export const toggleFilterStatus = async (
     } catch (error) {
         addErrorToast({ error });
         setState('processingConfigFilter', false);
+    }
+};
+
+export const disableFilter = async (filter: Filter): Promise<boolean> => {
+    const data: FilterSetUrlData = {
+        enabled: false,
+        name: filter.name,
+        url: filter.url,
+    };
+    try {
+        await filteringSetURL({ url: filter.url, data, whitelist: false });
+        addSuccessToast(
+            createUndoToast(
+                intl.getMessage('user_rules_filter_was_disabled', {
+                    value: filter.name,
+                }),
+                intl.getMessage('notify_undo'),
+                async () => {
+                    await filteringSetURL({
+                        url: filter.url,
+                        data: { ...data, enabled: true },
+                        whitelist: false,
+                    });
+                    await getFilteringStatus();
+                },
+            ),
+        );
+        await getFilteringStatus();
+        return true;
+    } catch (error) {
+        addErrorToast({ error });
+        return false;
     }
 };
 

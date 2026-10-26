@@ -2,6 +2,7 @@ import { For } from 'solid-js';
 import cn from 'clsx';
 import { Icon } from 'panel/common/ui/Icon';
 import { Link } from 'panel/common/ui/Link';
+import { TruncatedText } from 'panel/common/ui/TruncatedText';
 import { type RoutePathKey } from 'panel/components/Routes/Paths';
 import theme from 'panel/lib/theme';
 
@@ -11,6 +12,7 @@ export type BreadcrumbLink = {
     path: RoutePathKey;
     title: string;
     props?: Partial<Record<string, string | number>>;
+    dataTestid?: string;
 };
 
 type Props = {
@@ -21,7 +23,7 @@ type Props = {
 export const Breadcrumbs = (props: Props) => (
     <div class={s.wrapper}>
         <For each={props.parentLinks}>
-            {({ path, title, props: linkProps }) => (
+            {({ path, title, props: linkProps, dataTestid }) => (
                 <div class={s.link}>
                     <Link
                         to={path}
@@ -31,6 +33,7 @@ export const Breadcrumbs = (props: Props) => (
                             theme.common.textOverflow,
                         )}
                         props={linkProps}
+                        data-testid={dataTestid}
                     >
                         {title}
                     </Link>
@@ -38,8 +41,6 @@ export const Breadcrumbs = (props: Props) => (
                 </div>
             )}
         </For>
-        <div class={cn(theme.common.textOverflow, s.current)} title={props.currentTitle}>
-            {props.currentTitle}
-        </div>
+        <TruncatedText text={props.currentTitle} class={s.current} />
     </div>
 );

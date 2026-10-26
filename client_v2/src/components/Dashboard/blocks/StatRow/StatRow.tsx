@@ -3,10 +3,12 @@ import { Show } from 'solid-js';
 import intl from 'panel/common/intl';
 import { Icon, type IconType } from 'panel/common/ui/Icon';
 import theme from 'panel/lib/theme';
-import { Tooltip } from 'panel/common/ui/Tooltip';
+import { Link } from 'panel/common/ui/Link';
+import { type QueryParams, type RoutePathKey } from 'panel/components/Routes/Paths';
 import cn from 'clsx';
-import { formatCompactNumber, formatNumber } from 'panel/helpers/helpers';
+import { formatCompactNumber } from 'panel/helpers/helpers';
 
+import { RowTooltip } from '../RowTooltip';
 import s from './StatRow.module.pcss';
 
 export type StatRowProps = {
@@ -17,6 +19,8 @@ export type StatRowProps = {
     isTotal?: boolean;
     isQueriesValue?: boolean;
     tooltip: string;
+    linkTo?: RoutePathKey;
+    query?: QueryParams;
     rowTheme:
         | 'dnsQueries'
         | 'adsBlocked'
@@ -29,22 +33,40 @@ export type StatRowProps = {
 export const StatRow = (props: StatRowProps) => {
     const isQueriesValue = () => props.isQueriesValue !== false;
 
-    const formattedValue = () =>
-        typeof props.value === 'number' ? formatNumber(props.value) : props.value;
+    const queriesValue = () =>
+        typeof props.value === 'number' ? formatCompactNumber(props.value) : props.value;
 
-    return (
-        <div class={cn(s.statRow, s[props.rowTheme])}>
+    const queriesPercent = () => (
+        <div class={cn(theme.text.t3, theme.text.condenced, s.queryPercent)}>
+            <Show
+                when={props.isTotal}
+                fallback={
+                    <Show when={props.percent !== undefined && props.percent! > 0}>
+                        <span>({props.percent!.toFixed(1)}%)</span>
+                    </Show>
+                }
+            >
+                <span>({intl.getMessage('total')})</span>
+            </Show>
+        </div>
+    );
+
+    const rowClass = () => cn(s.statRow, s[props.rowTheme], props.linkTo && s.statRowLink);
+
+    const rowContent = () => (
+        <>
             <div class={s.statRowDropdown}>
-                <Tooltip
-                    position="bottomLeft"
-                    overlayClass={s.queryTooltipOverlay}
-                    content={<div class={cn(theme.text.t3, s.statTooltip)}>{props.tooltip}</div>}
+                <div
+                    class={cn(
+                        theme.text.t3,
+                        theme.text.condenced,
+                        theme.common.noShrink,
+                        s.statRowLeft,
+                    )}
                 >
-                    <div class={cn(theme.text.t3, theme.text.condenced, s.statRowLeft)}>
-                        <Icon icon={props.icon} class={s.tableRowIcon} />
-                        {props.label}
-                    </div>
-                </Tooltip>
+                    <Icon icon={props.icon} class={s.tableRowIcon} />
+                    {props.label}
+                </div>
             </div>
 
             <div class={s.statRowValue}>
@@ -57,43 +79,10 @@ export const StatRow = (props: StatRowProps) => {
                     }
                 >
                     <div class={s.dropdownWrapper}>
-                        <Tooltip
-                            position="top"
-                            overlayClass={s.queryTooltipOverlay}
-                            content={
-                                <div class={s.queryTooltip}>
-                                    {intl.getMessage('queries_tooltip', {
-                                        value: formattedValue(),
-                                    })}
-                                </div>
-                            }
-                        >
-                            <div class={cn(theme.text.t3, theme.text.condenced, s.queryCount)}>
-                                {typeof props.value === 'number'
-                                    ? formatCompactNumber(props.value)
-                                    : props.value}
-
-                                <div
-                                    class={cn(theme.text.t3, theme.text.condenced, s.queryPercent)}
-                                >
-                                    <Show
-                                        when={props.isTotal}
-                                        fallback={
-                                            <Show
-                                                when={
-                                                    props.percent !== undefined &&
-                                                    props.percent! > 0
-                                                }
-                                            >
-                                                <span>({props.percent!.toFixed(1)}%)</span>
-                                            </Show>
-                                        }
-                                    >
-                                        <span>({intl.getMessage('total')})</span>
-                                    </Show>
-                                </div>
-                            </div>
-                        </Tooltip>
+                        <div class={cn(theme.text.t3, theme.text.condenced, s.queryCount)}>
+                            <span class={s.queryCountValue}>{queriesValue()}</span>
+                            {queriesPercent()}
+                        </div>
                     </div>
                 </Show>
 
@@ -115,6 +104,24 @@ export const StatRow = (props: StatRowProps) => {
                     />
                 </div>
             </Show>
-        </div>
+        </>
+    );
+
+    // The description is plain text, so its overlay must not swallow the
+    // pointer: it overlaps the row below and would otherwise keep that row from
+    // receiving its own hover.
+    return (
+        <RowTooltip
+            content={<div class={cn(theme.text.t3, s.statTooltip)}>{props.tooltip}</div>}
+            overlayClass={s.queryTooltipOverlay}
+        >
+            <Show when={props.linkTo} fallback={<div class={rowClass()}>{rowContent()}</div>}>
+                {(to) => (
+                    <Link to={to()} query={props.query} class={rowClass()}>
+                        {rowContent()}
+                    </Link>
+                )}
+            </Show>
+        </RowTooltip>
     );
 };

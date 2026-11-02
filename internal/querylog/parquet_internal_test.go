@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
+	"github.com/AdguardTeam/AdGuardHome/internal/stats"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/AdguardTeam/urlfilter/rules"
@@ -137,4 +138,45 @@ func TestQueryLog_parquetFiles(t *testing.T) {
 		assert.Empty(t, files)
 		assert.DirExists(t, l.logDir)
 	})
+}
+
+func TestQueryLog_RangeEntries(t *testing.T) {
+	l := newTestParquetLog(t)
+	ctx := testutil.ContextWithTimeout(t, testTimeout)
+
+	now := time.Now()
+	old := &logEntry{Time: now.Add(-2 * time.Hour), QHost: "old.example", IP: net.IPv4(127, 0, 0, 1)}
+	blocked := &logEntry{
+		Time:     now.Add(-time.Hour),
+		QHost:    "blocked.example",
+		ClientID: "cli",
+		IP:       net.IPv4(127, 0, 0, 2),
+		Upstream: "1.1.1.1:53",
+		Elapsed:  time.Millisecond,
+		Result:   filtering.Result{Reason: filtering.FilteredBlockList, IsFiltered: true},
+	}
+	require.NoError(t, l.writeParquet(ctx, []*logEntry{old, blocked}))
+
+	// Not flushed yet.
+	l.buffer.Push(&logEntry{Time: now, QHost: "mem.example", IP: net.IPv4(127, 0, 0, 3)})
+
+	got := map[string]*stats.Entry{}
+	gotIDs := map[string][]string{}
+	l.RangeEntries(ctx, now.Add(-90*time.Minute), func(_ time.Time, ids []string, e *stats.Entry) {
+		got[e.Domain], gotIDs[e.Domain] = e, ids
+	})
+
+	require.Len(t, got, 2)
+	require.Contains(t, got, "mem.example")
+
+	b := got["blocked.example"]
+	require.NotNil(t, b)
+
+	assert.Equal(t, stats.RFiltered, b.Result)
+	assert.Equal(t, "cli", b.Client)
+	assert.Equal(t, []string{"cli", "127.0.0.2"}, gotIDs["blocked.example"])
+	require.Len(t, b.UpstreamStats, 1)
+
+	assert.Equal(t, "1.1.1.1:53", b.UpstreamStats[0].Address)
+	assert.Equal(t, time.Millisecond, b.ProcessingTime)
 }

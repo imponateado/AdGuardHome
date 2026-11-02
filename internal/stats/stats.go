@@ -3,13 +3,16 @@
 package stats
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/netip"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/agh"
@@ -20,6 +23,7 @@ import (
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/timeutil"
+	"github.com/google/renameio/v2/maybe"
 )
 
 // checkInterval returns true if days is valid to be used as statistics
@@ -40,6 +44,14 @@ func validateIvl(ivl time.Duration) (err error) {
 	}
 
 	return nil
+}
+
+// QueryLogReader is the query log, from which the statistics are computed.
+type QueryLogReader interface {
+	// RangeEntries calls f for each logged query not older than since,
+	// including the ones not yet written to disk.  ids are the identifiers of
+	// the client, see [Interface.ShouldCount].
+	RangeEntries(ctx context.Context, since time.Time, f func(t time.Time, ids []string, e *Entry))
 }
 
 // Config is the configuration structure for the statistics collecting.
@@ -69,12 +81,13 @@ type Config struct {
 	// and matches them.
 	Ignored *aghnet.IgnoreEngine
 
-	// Filename is the directory where each hourly unit is stored as a gob
-	// file named by the unit ID.
-	//
-	// TODO(f.setrakov): Move the work with DB into a separate entity with
-	// interface.
+	// Filename is the file storing the time of the last statistics reset, since
+	// the statistics are computed from the query log, which a reset keeps.
 	Filename string
+
+	// QueryLog is the query log to compute the statistics from.  If nil, the
+	// statistics are empty.
+	QueryLog QueryLogReader
 
 	// Limit is an upper limit for collecting statistics.
 	Limit time.Duration
@@ -105,17 +118,18 @@ type Interface interface {
 	ShouldCount(host string, qType, qClass uint16, ids []string) bool
 }
 
-// StatsCtx collects the statistics and flushes it to the database.  Its default
-// flushing interval is one hour.
+// StatsCtx computes the statistics from the query log by hourly units.
 type StatsCtx struct {
 	// logger is used for logging the operation of the statistics management.
 	// It must not be nil.
 	logger *slog.Logger
 
-	// currMu protects curr.
-	currMu *sync.RWMutex
-	// curr is the actual statistics collection result.
-	curr *unit
+	// queryLog is the source of the statistics, if any.
+	queryLog QueryLogReader
+
+	// resetTime is the Unix time in nanoseconds of the last reset.  Older
+	// queries aren't counted.
+	resetTime atomic.Int64
 
 	// unitIDGen is the function that generates an identifier for the current
 	// unit.  It's here for only testing purposes.
@@ -137,7 +151,7 @@ type StatsCtx struct {
 	// shouldCountClient returns client's ignore setting.
 	shouldCountClient func([]string) bool
 
-	// filename is the directory with the unit files.
+	// filename is the file storing resetTime.
 	filename string
 
 	// limit is an upper limit for collecting statistics.
@@ -163,7 +177,7 @@ func New(conf Config) (s Interface, err error) {
 
 	ctx := &StatsCtx{
 		logger:         conf.Logger,
-		currMu:         &sync.RWMutex{},
+		queryLog:       conf.QueryLog,
 		httpReg:        conf.HTTPReg,
 		configModifier: conf.ConfigModifier,
 		filename:       conf.Filename,
@@ -179,16 +193,18 @@ func New(conf Config) (s Interface, err error) {
 		ctx.unitIDGen = conf.UnitID
 	}
 
-	err = ctx.openDB()
-	if err != nil {
-		return nil, fmt.Errorf("opening database: %w", err)
+	data, err := os.ReadFile(ctx.filename)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("reading reset time: %w", err)
+	} else if err == nil {
+		var reset int64
+		reset, err = strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parsing reset time: %w", err)
+		}
+
+		ctx.resetTime.Store(reset)
 	}
-
-	id := ctx.unitIDGen()
-	ctx.deleteOldUnits(id - uint32(ctx.limit.Hours()) - 1)
-
-	ctx.curr = newUnit(id)
-	ctx.curr.deserialize(ctx.loadUnitFromDB(id))
 
 	ctx.logger.Debug("initialized")
 
@@ -220,46 +236,17 @@ var _ Interface = (*StatsCtx)(nil)
 // Start implements the [Interface] interface for *StatsCtx.
 func (s *StatsCtx) Start() {
 	s.initWeb()
-
-	go s.periodicFlush()
 }
 
-// Close implements the [io.Closer] interface for *StatsCtx.
+// Close implements the [io.Closer] interface for *StatsCtx.  There is nothing
+// to write, since the query log keeps the data.
 func (s *StatsCtx) Close() (err error) {
-	s.currMu.RLock()
-	defer s.currMu.RUnlock()
-
-	return s.flushUnitToDB(s.curr.serialize(), s.curr.id)
+	return nil
 }
 
-// Update implements the [Interface] interface for *StatsCtx.  e must not be
-// nil.
-func (s *StatsCtx) Update(e *Entry) {
-	s.confMu.Lock()
-	defer s.confMu.Unlock()
-
-	if !s.enabled || s.limit == 0 {
-		return
-	}
-
-	err := e.validate()
-	if err != nil {
-		s.logger.Debug("validating entry", slogutil.KeyError, err)
-
-		return
-	}
-
-	s.currMu.Lock()
-	defer s.currMu.Unlock()
-
-	if s.curr == nil {
-		s.logger.Error("current unit is nil")
-
-		return
-	}
-
-	s.curr.add(e)
-}
+// Update implements the [Interface] interface for *StatsCtx.  It does nothing,
+// since the statistics are computed from the query log.
+func (s *StatsCtx) Update(_ *Entry) {}
 
 // WriteDiskConfig implements the [Interface] interface for *StatsCtx.
 func (s *StatsCtx) WriteDiskConfig(dc *configmgr.StatsConfig) {
@@ -275,10 +262,10 @@ func (s *StatsCtx) WriteDiskConfig(dc *configmgr.StatsConfig) {
 // TopClientsIP implements the [Interface] interface for *StatsCtx.
 func (s *StatsCtx) TopClientsIP(maxCount uint) (ips []netip.Addr) {
 	s.confMu.RLock()
-	defer s.confMu.RUnlock()
-
 	limit := uint32(s.limit.Hours())
-	if !s.enabled || limit == 0 {
+	s.confMu.RUnlock()
+
+	if limit == 0 {
 		return nil
 	}
 
@@ -307,97 +294,6 @@ func (s *StatsCtx) TopClientsIP(maxCount uint) (ips []netip.Addr) {
 	return ips
 }
 
-// deleteOldUnits removes the unit files with IDs less than firstID.  It returns
-// the number of deletions performed.
-func (s *StatsCtx) deleteOldUnits(firstID uint32) (deleted int) {
-	s.logger.Debug("deleting old units up to", "unit", firstID)
-
-	ents, err := os.ReadDir(s.filename)
-	if err != nil {
-		s.logger.Error("reading units dir", slogutil.KeyError, err)
-
-		return 0
-	}
-
-	for _, ent := range ents {
-		id, parseErr := strconv.ParseUint(ent.Name(), 10, 32)
-		if parseErr != nil || uint32(id) >= firstID {
-			continue
-		}
-
-		err = os.Remove(s.unitPath(uint32(id)))
-		if err != nil {
-			s.logger.Error("deleting unit", slogutil.KeyError, err)
-
-			continue
-		}
-
-		deleted++
-	}
-
-	return deleted
-}
-
-// openDB creates the directory for the unit files, if needed.
-func (s *StatsCtx) openDB() (err error) {
-	return os.MkdirAll(s.filename, aghos.DefaultPermDir)
-}
-
-func (s *StatsCtx) flush() (cont bool, sleepFor time.Duration) {
-	id := s.unitIDGen()
-
-	s.confMu.Lock()
-	defer s.confMu.Unlock()
-
-	// NOTE:  This mutex, when combined with the database transaction, is
-	// required to be locked first.
-	s.currMu.Lock()
-	defer s.currMu.Unlock()
-
-	ptr := s.curr
-	if ptr == nil {
-		return false, 0
-	}
-
-	limit := uint32(s.limit.Hours())
-	if limit == 0 || ptr.id == id {
-		return true, time.Second
-	}
-
-	return s.flushDB(id, limit, ptr)
-}
-
-// flushDB writes the unit to its file and removes the stale unit file.  confMu
-// and currMu are expected to be locked.
-func (s *StatsCtx) flushDB(id, limit uint32, ptr *unit) (cont bool, sleepFor time.Duration) {
-	s.curr = newUnit(id)
-
-	err := s.flushUnitToDB(ptr.serialize(), ptr.id)
-	if err != nil {
-		s.logger.Error("flushing unit", slogutil.KeyError, err)
-	}
-
-	err = os.Remove(s.unitPath(id - limit))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		s.logger.Error("deleting unit", slogutil.KeyError, err)
-	}
-
-	return true, 0
-}
-
-// periodicFlush checks and flushes the unit to the database if the freshly
-// generated unit ID differs from the current's ID.  Flushing process includes:
-//   - swapping the current unit with the new empty one;
-//   - writing the current unit to the database;
-//   - removing the stale unit from the database.
-func (s *StatsCtx) periodicFlush() {
-	for cont, sleepFor := true, time.Duration(0); cont; time.Sleep(sleepFor) {
-		cont, sleepFor = s.flush()
-	}
-
-	s.logger.Debug("periodic flushing finished")
-}
-
 // setLimit sets the limit.  s.lock is expected to be locked.
 //
 // TODO(s.chzhen):  Remove it when migration to the new API is over.
@@ -418,62 +314,70 @@ func (s *StatsCtx) setLimit(limit time.Duration) {
 	}
 }
 
-// Reset counters and clear database
+// clear makes the statistics ignore the queries logged so far.  The query log
+// itself is kept.
 func (s *StatsCtx) clear() (err error) {
-	defer func() { err = errors.Annotate(err, "clearing: %w") }()
+	now := time.Now().UnixNano()
+	s.resetTime.Store(now)
 
-	err = os.RemoveAll(s.filename)
+	err = maybe.WriteFile(s.filename, []byte(strconv.FormatInt(now, 10)), aghos.DefaultPermFile)
 	if err != nil {
-		s.logger.Error("removing", slogutil.KeyError, err)
+		return fmt.Errorf("clearing: writing reset time: %w", err)
 	}
 
-	err = s.openDB()
-	if err != nil {
-		s.logger.Error("opening database", slogutil.KeyError, err)
-	}
-
-	// Use defer to unlock the mutex as soon as possible.
-	defer s.logger.Debug("cleared")
-
-	s.currMu.Lock()
-	defer s.currMu.Unlock()
-
-	s.curr = newUnit(s.unitIDGen())
+	s.logger.Debug("cleared")
 
 	return nil
 }
 
-// loadUnits returns stored units from the unit files and current unit ID.
+// loadUnits returns the hourly units of the last limit hours computed from the
+// query log and the current unit ID.  The units are empty if the statistics
+// are disabled.
 func (s *StatsCtx) loadUnits(limit uint32) (units []*unitDB, curID uint32) {
-	s.currMu.RLock()
-	defer s.currMu.RUnlock()
+	s.confMu.RLock()
+	enabled, ignored, shouldCount := s.enabled, s.ignored, s.shouldCountClient
+	s.confMu.RUnlock()
 
-	cur := s.curr
-
-	if cur != nil {
-		curID = cur.id
-	} else {
-		curID = s.unitIDGen()
-	}
-
-	// Per-hour units.
-	units = make([]*unitDB, 0, limit)
+	curID = s.unitIDGen()
 	firstID := curID - limit + 1
-	for i := firstID; i != curID; i++ {
-		u := s.loadUnitFromDB(i)
-		if u == nil {
-			u = &unitDB{NResult: make([]uint64, resultLast)}
+
+	hours := make([]*unit, limit)
+	for i := range hours {
+		hours[i] = newUnit(firstID + uint32(i))
+	}
+
+	if enabled && s.queryLog != nil {
+		since := time.Unix((int64(curID)-int64(limit)+1)*secsInHour, 0)
+		if reset := time.Unix(0, s.resetTime.Load()); reset.After(since) {
+			since = reset
 		}
-		units = append(units, u)
+
+		// Cache the client settings, since there are few clients and many
+		// queries.
+		counted := map[string]bool{}
+		s.queryLog.RangeEntries(context.TODO(), since, func(t time.Time, ids []string, e *Entry) {
+			// Unit IDs may wrap around in tests, so compare the offset.
+			off := uint32(t.Unix()/secsInHour) - firstID
+			if off >= limit || ignored.Has(e.Domain) {
+				return
+			}
+
+			key := strings.Join(ids, " ")
+			ok, found := counted[key]
+			if !found {
+				ok = shouldCount(ids)
+				counted[key] = ok
+			}
+
+			if ok {
+				hours[off].add(e)
+			}
+		})
 	}
 
-	if cur != nil {
-		units = append(units, cur.serialize())
-	}
-
-	if unitsLen := len(units); unitsLen != int(limit) {
-		// Should not happen.
-		panic(fmt.Errorf("loaded %d units when the desired number is %d", unitsLen, limit))
+	units = make([]*unitDB, limit)
+	for i, u := range hours {
+		units[i] = u.serialize()
 	}
 
 	return units, curID

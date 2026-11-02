@@ -1,6 +1,7 @@
 package querylog
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"github.com/AdguardTeam/AdGuardHome/internal/aghos"
 	"github.com/AdguardTeam/AdGuardHome/internal/configmgr"
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
+	"github.com/AdguardTeam/AdGuardHome/internal/stats"
 	"github.com/AdguardTeam/golibs/container"
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/service"
@@ -35,6 +37,10 @@ type QueryLog interface {
 
 	// ShouldLog returns true if request for the host should be logged.
 	ShouldLog(host string, qType, qClass uint16, ids []string) bool
+
+	// RangeEntries calls f for each logged query not older than since, for
+	// computing the statistics.
+	RangeEntries(ctx context.Context, since time.Time, f func(t time.Time, ids []string, e *stats.Entry))
 }
 
 // Config is the query log configuration structure.

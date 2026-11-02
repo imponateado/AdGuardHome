@@ -1,22 +1,12 @@
 package stats
 
 import (
-	"bytes"
-	"encoding/gob"
-	"fmt"
 	"maps"
-	"os"
-	"path/filepath"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/aghnet"
-	"github.com/AdguardTeam/AdGuardHome/internal/aghos"
 	"github.com/AdguardTeam/dnsproxy/proxy"
-	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/logutil/slogutil"
-	"github.com/google/renameio/v2/maybe"
 )
 
 const (
@@ -76,22 +66,6 @@ type Entry struct {
 	// ProcessingTime is the duration of the request processing from the start
 	// of the request including timeouts.
 	ProcessingTime time.Duration
-}
-
-// validate returns an error if entry is not valid.
-func (e *Entry) validate() (err error) {
-	switch {
-	case e.Result == 0:
-		return errors.Error("result code is not set")
-	case e.Result >= resultLast:
-		return fmt.Errorf("unknown result code %d", e.Result)
-	case e.Domain == "":
-		return errors.Error("domain is empty")
-	case e.Client == "":
-		return errors.Error("client is empty")
-	default:
-		return nil
-	}
 }
 
 // unit collects the statistics data for a specific period of time.
@@ -183,16 +157,12 @@ type unitDB struct {
 	TimeAvg uint32
 }
 
+// secsInHour is the number of seconds in an hour, the length of a unit.
+const secsInHour = int64(time.Hour / time.Second)
+
 // newUnitID is the default UnitIDGenFunc that generates the unique id hourly.
 func newUnitID() (id uint32) {
-	const secsInHour = int64(time.Hour / time.Second)
-
 	return uint32(time.Now().Unix() / secsInHour)
-}
-
-// unitPath returns the path of the file storing the unit with id.
-func (s *StatsCtx) unitPath(id uint32) (p string) {
-	return filepath.Join(s.filename, strconv.FormatUint(uint64(id), 10))
 }
 
 // compareCount used to sort countPair by Count in descending order.
@@ -218,15 +188,6 @@ func convertMapToSlice(m map[string]uint64, maxVal int) (s []countPair) {
 	return s[:min(maxVal, len(s))]
 }
 
-func convertSliceToMap(a []countPair) (m map[string]uint64) {
-	m = map[string]uint64{}
-	for _, it := range a {
-		m[it.Name] = it.Count
-	}
-
-	return m
-}
-
 // serialize converts u to the *unitDB.  It's safe for concurrent use.  u must
 // not be nil.
 func (u *unit) serialize() (udb *unitDB) {
@@ -235,59 +196,17 @@ func (u *unit) serialize() (udb *unitDB) {
 		timeAvg = uint32(u.timeSum / u.nTotal)
 	}
 
+	// Keep all the names, so that the tops over many hours are exact.
 	return &unitDB{
 		NTotal:             u.nTotal,
 		NResult:            append([]uint64{}, u.nResult...),
-		Domains:            convertMapToSlice(u.domains, maxDomains),
-		BlockedDomains:     convertMapToSlice(u.blockedDomains, maxDomains),
-		Clients:            convertMapToSlice(u.clients, maxClients),
-		UpstreamsResponses: convertMapToSlice(u.upstreamsResponses, maxUpstreams),
-		UpstreamsTimeSum:   convertMapToSlice(u.upstreamsTimeSum, maxUpstreams),
+		Domains:            convertMapToSlice(u.domains, len(u.domains)),
+		BlockedDomains:     convertMapToSlice(u.blockedDomains, len(u.blockedDomains)),
+		Clients:            convertMapToSlice(u.clients, len(u.clients)),
+		UpstreamsResponses: convertMapToSlice(u.upstreamsResponses, len(u.upstreamsResponses)),
+		UpstreamsTimeSum:   convertMapToSlice(u.upstreamsTimeSum, len(u.upstreamsTimeSum)),
 		TimeAvg:            timeAvg,
 	}
-}
-
-// loadUnitFromDB loads unit by id from its file.  It returns nil if there is
-// no such unit.
-func (s *StatsCtx) loadUnitFromDB(id uint32) (udb *unitDB) {
-	data, err := os.ReadFile(s.unitPath(id))
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			s.logger.Error("reading unit", slogutil.KeyError, err)
-		}
-
-		return nil
-	}
-
-	s.logger.Debug("loading unit", "id", id)
-
-	udb = &unitDB{}
-	err = gob.NewDecoder(bytes.NewReader(data)).Decode(udb)
-	if err != nil {
-		s.logger.Error("gob decode", slogutil.KeyError, err)
-
-		return nil
-	}
-
-	return udb
-}
-
-// deserialize assigns the appropriate values from udb to u.  u must not be nil.
-// It's safe for concurrent use.
-func (u *unit) deserialize(udb *unitDB) {
-	if udb == nil {
-		return
-	}
-
-	u.nTotal = udb.NTotal
-	u.nResult = make([]uint64, resultLast)
-	copy(u.nResult, udb.NResult)
-	u.domains = convertSliceToMap(udb.Domains)
-	u.blockedDomains = convertSliceToMap(udb.BlockedDomains)
-	u.clients = convertSliceToMap(udb.Clients)
-	u.upstreamsResponses = convertSliceToMap(udb.UpstreamsResponses)
-	u.upstreamsTimeSum = convertSliceToMap(udb.UpstreamsTimeSum)
-	u.timeSum = uint64(udb.TimeAvg) * udb.NTotal
 }
 
 // add adds new data to u.  It's safe for concurrent use.
@@ -313,24 +232,6 @@ func (u *unit) add(e *Entry) {
 		u.upstreamsResponses[addr]++
 		u.upstreamsTimeSum[addr] += uint64(s.QueryDuration.Microseconds())
 	}
-}
-
-// flushUnitToDB atomically writes udb to the file of the unit with id.
-func (s *StatsCtx) flushUnitToDB(udb *unitDB, id uint32) (err error) {
-	s.logger.Debug("flushing unit", "id", id, "req_num", udb.NTotal)
-
-	buf := &bytes.Buffer{}
-	err = gob.NewEncoder(buf).Encode(udb)
-	if err != nil {
-		return fmt.Errorf("encoding unit: %w", err)
-	}
-
-	err = maybe.WriteFile(s.unitPath(id), buf.Bytes(), aghos.DefaultPermFile)
-	if err != nil {
-		return fmt.Errorf("writing unit: %w", err)
-	}
-
-	return nil
 }
 
 func convertTopSlice(a []countPair) (m []map[string]uint64) {

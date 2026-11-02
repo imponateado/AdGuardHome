@@ -27,7 +27,7 @@ func newTestStatsCtx(tb testing.TB, c Config) (s *StatsCtx) {
 	c.Logger = cmp.Or(c.Logger, testLogger)
 	c.ConfigModifier = cmp.Or[agh.ConfigModifier](c.ConfigModifier, agh.EmptyConfigModifier{})
 	c.HTTPReg = cmp.Or[aghhttp.Registrar](c.HTTPReg, aghhttp.EmptyRegistrar{})
-	c.Filename = cmp.Or(c.Filename, filepath.Join(tb.TempDir(), "stats"))
+	c.Filename = cmp.Or(c.Filename, filepath.Join(tb.TempDir(), "stats_reset"))
 	c.Limit = cmp.Or(c.Limit, timeutil.Day)
 	if c.ShouldCountClient == nil {
 		c.ShouldCountClient = func([]string) bool { return true }
@@ -50,9 +50,11 @@ func newTestStatsCtx(tb testing.TB, c Config) (s *StatsCtx) {
 
 func TestStats_races(t *testing.T) {
 	var currentRound atomic.Uint32
+	ql := &TestQueryLog{}
 	s := newTestStatsCtx(t, Config{
-		UnitID:  currentRound.Load,
-		Enabled: true,
+		UnitID:   currentRound.Load,
+		Enabled:  true,
+		QueryLog: ql,
 	})
 
 	s.Start()
@@ -72,7 +74,7 @@ func TestStats_races(t *testing.T) {
 
 		<-waitCh
 
-		s.Update(e)
+		ql.Add(currentRound.Load(), e)
 	}
 	readFunc := func(start, fin *sync.WaitGroup, waitCh <-chan unit) {
 		start.Done()
@@ -193,36 +195,29 @@ func TestStatsCtx_DataFromUnits_month(t *testing.T) {
 	}
 }
 
-func TestStatsCtx_unitFiles(t *testing.T) {
+func TestStatsCtx_reset(t *testing.T) {
 	const curID uint32 = 1_000
 
-	dir := filepath.Join(t.TempDir(), "stats")
+	ql := &TestQueryLog{}
+	ql.Add(curID, &Entry{Domain: "example.org", Client: "client", Result: RNotFiltered})
+
 	conf := Config{
-		Filename: dir,
+		Filename: filepath.Join(t.TempDir(), "stats_reset"),
 		UnitID:   func() (id uint32) { return curID },
 		Enabled:  true,
+		QueryLog: ql,
 	}
 
 	s := newTestStatsCtx(t, conf)
-	stale := &unitDB{NResult: make([]uint64, resultLast), NTotal: 1}
-	require.NoError(t, s.flushUnitToDB(stale, curID-30))
-
-	kept := &unitDB{NResult: make([]uint64, resultLast), NTotal: 2}
-	require.NoError(t, s.flushUnitToDB(kept, curID-1))
-
-	s.Update(&Entry{Domain: "example.org", Client: "client", Result: RNotFiltered})
-	require.NoError(t, s.Close())
-
-	// Reopening deletes units older than the one-day limit and restores the
-	// current one from its file.
-	s = newTestStatsCtx(t, conf)
-
-	assert.NoFileExists(t, s.unitPath(curID-30))
-	assert.Equal(t, uint64(2), s.loadUnitFromDB(curID-1).NTotal)
-	assert.Equal(t, uint64(1), s.curr.nTotal)
+	units, _ := s.loadUnits(24)
+	require.Equal(t, uint64(1), units[23].NTotal)
 
 	require.NoError(t, s.clear())
 
-	assert.Nil(t, s.loadUnitFromDB(curID-1))
-	assert.DirExists(t, dir)
+	// The reset survives a restart, and the log keeps the query.
+	s = newTestStatsCtx(t, conf)
+	units, _ = s.loadUnits(24)
+
+	assert.Zero(t, units[23].NTotal)
+	assert.Len(t, ql.entries, 1)
 }

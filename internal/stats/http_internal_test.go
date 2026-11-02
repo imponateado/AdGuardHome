@@ -131,22 +131,17 @@ func TestHandleStatsConfig(t *testing.T) {
 	}
 }
 
-// populateTestData is a helper that creates test entries in db.  s must not be
-// nil.
-func populateTestData(tb testing.TB, s *StatsCtx) {
-	tb.Helper()
+// populateTestData is a helper that logs a query in the previous hour and one
+// in the current hour.  ql must not be nil.
+func populateTestData(ql *TestQueryLog) {
+	cur := newUnitID()
+	ql.Add(cur-1, &Entry{
+		Client: netutil.IPv4Localhost().String(),
+		Domain: TestDomain1,
+		Result: RNotFiltered,
+	})
 
-	oldUnitID := newUnitID() - 1
-	oldUnit := &unitDB{
-		NResult: make([]uint64, resultLast),
-		Domains: []countPair{{Name: TestDomain1, Count: 1}},
-		NTotal:  1,
-	}
-
-	err := s.flushUnitToDB(oldUnit, uint32(oldUnitID))
-	require.NoError(tb, err)
-
-	s.Update(&Entry{
+	ql.Add(cur, &Entry{
 		Client:         netutil.IPv4Localhost().String(),
 		Domain:         TestDomain2,
 		ProcessingTime: 3 * time.Minute,
@@ -196,14 +191,16 @@ func TestStatsCtx_handleStats(t *testing.T) {
 		recent: time.Hour.Milliseconds(),
 	}}
 
+	ql := &TestQueryLog{}
 	s := newTestStatsCtx(t, Config{
-		Enabled: true,
+		Enabled:  true,
+		QueryLog: ql,
 	})
 
 	s.Start()
 	defer testutil.CleanupAndRequireSuccess(t, s.Close)
 
-	populateTestData(t, s)
+	populateTestData(ql)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			url := "/control/stats"

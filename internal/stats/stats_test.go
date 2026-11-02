@@ -54,13 +54,15 @@ func TestStats(t *testing.T) {
 	cliIPStr := cliIP.String()
 
 	handlers := map[string]http.Handler{}
+	ql := &stats.TestQueryLog{}
 	conf := stats.Config{
 		Logger:            slogutil.NewDiscardLogger(),
 		ShouldCountClient: func([]string) bool { return true },
-		Filename:          filepath.Join(t.TempDir(), "stats"),
+		Filename:          filepath.Join(t.TempDir(), "stats_reset"),
 		Limit:             timeutil.Day,
 		Enabled:           true,
 		UnitID:            constUnitID,
+		QueryLog:          ql,
 		HTTPReg: &aghtest.Registrar{
 			OnRegister: func(_, url string, handler http.HandlerFunc) {
 				handlers[url] = handler
@@ -130,7 +132,7 @@ func TestStats(t *testing.T) {
 		}
 
 		for _, e := range entries {
-			s.Update(e)
+			ql.Add(constUnitID(), e)
 		}
 
 		data := &stats.StatsResp{}
@@ -176,14 +178,16 @@ func TestStats(t *testing.T) {
 func TestLargeNumbers(t *testing.T) {
 	var curHour uint32 = 1
 	handlers := map[string]http.Handler{}
+	ql := &stats.TestQueryLog{}
 
 	conf := stats.Config{
 		Logger:            slogutil.NewDiscardLogger(),
 		ShouldCountClient: func([]string) bool { return true },
-		Filename:          filepath.Join(t.TempDir(), "stats"),
+		Filename:          filepath.Join(t.TempDir(), "stats_reset"),
 		Limit:             timeutil.Day,
 		Enabled:           true,
 		UnitID:            func() (id uint32) { return atomic.LoadUint32(&curHour) },
+		QueryLog:          ql,
 		HTTPReg: &aghtest.Registrar{
 			OnRegister: func(_, url string, handler http.HandlerFunc) {
 				handlers[url] = handler
@@ -215,7 +219,7 @@ func TestLargeNumbers(t *testing.T) {
 				Result:         stats.RNotFiltered,
 				ProcessingTime: 123456,
 			}
-			s.Update(e)
+			ql.Add(atomic.LoadUint32(&curHour), e)
 		}
 	}
 
@@ -236,7 +240,7 @@ func TestShouldCount(t *testing.T) {
 	s, err := stats.New(stats.Config{
 		Logger:   slogutil.NewDiscardLogger(),
 		Enabled:  true,
-		Filename: filepath.Join(t.TempDir(), "stats"),
+		Filename: filepath.Join(t.TempDir(), "stats_reset"),
 		Limit:    timeutil.Day,
 		Ignored:  engine,
 		ShouldCountClient: func(ids []string) (a bool) {

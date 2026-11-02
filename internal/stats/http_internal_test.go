@@ -143,14 +143,7 @@ func populateTestData(tb testing.TB, s *StatsCtx) {
 		NTotal:  1,
 	}
 
-	db := s.db.Load()
-	tx, err := db.Begin(true)
-	require.NoError(tb, err)
-
-	err = s.flushUnitToDB(oldUnit, tx, uint32(oldUnitID))
-	require.NoError(tb, err)
-
-	err = finishTxn(tx, true)
+	err := s.flushUnitToDB(oldUnit, uint32(oldUnitID))
 	require.NoError(tb, err)
 
 	s.Update(&Entry{

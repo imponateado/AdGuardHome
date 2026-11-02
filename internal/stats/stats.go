@@ -3,15 +3,13 @@
 package stats
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/netip"
 	"os"
+	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/AdguardTeam/AdGuardHome/internal/agh"
@@ -22,8 +20,6 @@ import (
 	"github.com/AdguardTeam/golibs/errors"
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/timeutil"
-	"go.etcd.io/bbolt"
-	bbolterrors "go.etcd.io/bbolt/errors"
 )
 
 // checkInterval returns true if days is valid to be used as statistics
@@ -44,12 +40,6 @@ func validateIvl(ivl time.Duration) (err error) {
 	}
 
 	return nil
-}
-
-// QueryLogReader defines the methods required from the query log module.
-type QueryLogReader interface {
-	GetSQLDB() *sql.DB
-	Flush(ctx context.Context) error
 }
 
 // Config is the configuration structure for the statistics collecting.
@@ -79,7 +69,8 @@ type Config struct {
 	// and matches them.
 	Ignored *aghnet.IgnoreEngine
 
-	// Filename is the name of the database file.
+	// Filename is the directory where each hourly unit is stored as a gob
+	// file named by the unit ID.
 	//
 	// TODO(f.setrakov): Move the work with DB into a separate entity with
 	// interface.
@@ -90,9 +81,6 @@ type Config struct {
 
 	// Enabled tells if the statistics are enabled.
 	Enabled bool
-
-	// QueryLog is the interface to the query log module. If the query log uses SQLite, statistics will be calculated using SQL queries.
-	QueryLog QueryLogReader
 }
 
 // Interface is the statistics interface to be used by other packages.
@@ -129,9 +117,6 @@ type StatsCtx struct {
 	// curr is the actual statistics collection result.
 	curr *unit
 
-	// db is the opened statistics database, if any.
-	db atomic.Pointer[bbolt.DB]
-
 	// unitIDGen is the function that generates an identifier for the current
 	// unit.  It's here for only testing purposes.
 	unitIDGen UnitIDGenFunc
@@ -152,7 +137,7 @@ type StatsCtx struct {
 	// shouldCountClient returns client's ignore setting.
 	shouldCountClient func([]string) bool
 
-	// filename is the name of database file.
+	// filename is the directory with the unit files.
 	filename string
 
 	// limit is an upper limit for collecting statistics.
@@ -174,10 +159,6 @@ func New(conf Config) (s Interface, err error) {
 
 	if conf.ShouldCountClient == nil {
 		return nil, errors.Error("should count client is unspecified")
-	}
-
-	if conf.QueryLog != nil && conf.QueryLog.GetSQLDB() != nil {
-		return newSqliteStats(conf), nil
 	}
 
 	ctx := &StatsCtx{
@@ -203,24 +184,11 @@ func New(conf Config) (s Interface, err error) {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
 
-	var udb *unitDB
 	id := ctx.unitIDGen()
-
-	tx, err := ctx.db.Load().Begin(true)
-	if err != nil {
-		return nil, fmt.Errorf("opening a transaction: %w", err)
-	}
-
-	deleted := ctx.deleteOldUnits(tx, id-uint32(ctx.limit.Hours())-1)
-	udb = ctx.loadUnitFromDB(tx, id)
-
-	err = finishTxn(tx, deleted > 0)
-	if err != nil {
-		ctx.logger.Error("finishing transacation", slogutil.KeyError, err)
-	}
+	ctx.deleteOldUnits(id - uint32(ctx.limit.Hours()) - 1)
 
 	ctx.curr = newUnit(id)
-	ctx.curr.deserialize(udb)
+	ctx.curr.deserialize(ctx.loadUnitFromDB(id))
 
 	ctx.logger.Debug("initialized")
 
@@ -258,33 +226,10 @@ func (s *StatsCtx) Start() {
 
 // Close implements the [io.Closer] interface for *StatsCtx.
 func (s *StatsCtx) Close() (err error) {
-	db := s.db.Swap(nil)
-	if db == nil {
-		return nil
-	}
-	defer func() {
-		cerr := db.Close()
-		if cerr == nil {
-			s.logger.Debug("database closed")
-		}
-
-		err = errors.WithDeferred(err, cerr)
-	}()
-
-	// NOTE:  This mutex, when combined with the database transaction, is
-	// required to be locked first.
 	s.currMu.RLock()
 	defer s.currMu.RUnlock()
 
-	udb := s.curr.serialize()
-
-	tx, err := db.Begin(true)
-	if err != nil {
-		return fmt.Errorf("opening transaction: %w", err)
-	}
-	defer func() { err = errors.WithDeferred(err, finishTxn(tx, err == nil)) }()
-
-	return s.flushUnitToDB(udb, tx, s.curr.id)
+	return s.flushUnitToDB(s.curr.serialize(), s.curr.id)
 }
 
 // Update implements the [Interface] interface for *StatsCtx.  e must not be
@@ -362,74 +307,40 @@ func (s *StatsCtx) TopClientsIP(maxCount uint) (ips []netip.Addr) {
 	return ips
 }
 
-// deleteOldUnits walks the buckets available to tx and deletes old units.  It
-// returns the number of deletions performed.
-func (s *StatsCtx) deleteOldUnits(tx *bbolt.Tx, firstID uint32) (deleted int) {
+// deleteOldUnits removes the unit files with IDs less than firstID.  It returns
+// the number of deletions performed.
+func (s *StatsCtx) deleteOldUnits(firstID uint32) (deleted int) {
 	s.logger.Debug("deleting old units up to", "unit", firstID)
 
-	// TODO(a.garipov): See if this is actually necessary.  Looks like a rather
-	// bizarre solution.
-	const errStop errors.Error = "stop iteration"
+	ents, err := os.ReadDir(s.filename)
+	if err != nil {
+		s.logger.Error("reading units dir", slogutil.KeyError, err)
 
-	walk := func(name []byte, _ *bbolt.Bucket) (err error) {
-		nameID, ok := unitNameToID(name)
-		if ok && nameID >= firstID {
-			return errStop
-		}
-
-		err = tx.DeleteBucket(name)
-		if err != nil {
-			s.logger.Debug("deleting bucket", slogutil.KeyError, err)
-
-			return nil
-		}
-
-		s.logger.Debug("deleted unit", "name_id", nameID, "name", fmt.Sprintf("%x", name))
-
-		deleted++
-
-		return nil
+		return 0
 	}
 
-	err := tx.ForEach(walk)
-	if err != nil && !errors.Is(err, errStop) {
-		s.logger.Debug("deleting units", slogutil.KeyError, err)
+	for _, ent := range ents {
+		id, parseErr := strconv.ParseUint(ent.Name(), 10, 32)
+		if parseErr != nil || uint32(id) >= firstID {
+			continue
+		}
+
+		err = os.Remove(s.unitPath(uint32(id)))
+		if err != nil {
+			s.logger.Error("deleting unit", slogutil.KeyError, err)
+
+			continue
+		}
+
+		deleted++
 	}
 
 	return deleted
 }
 
-// openDB returns an error if the database can't be opened from the specified
-// file.  It's safe for concurrent use.
+// openDB creates the directory for the unit files, if needed.
 func (s *StatsCtx) openDB() (err error) {
-	s.logger.Debug("opening database")
-
-	var db *bbolt.DB
-
-	db, err = bbolt.Open(s.filename, aghos.DefaultPermFile, nil)
-	if err != nil {
-		if err.Error() == "invalid argument" {
-			const lines = `AdGuard Home cannot be initialized due to an incompatible file system.
-Please read the explanation here: https://github.com/AdguardTeam/AdGuardHome/wiki/Getting-Started#limitations`
-
-			// TODO(s.chzhen):  Use passed context.
-			slogutil.PrintLines(
-				context.TODO(),
-				s.logger,
-				slog.LevelError,
-				"opening database",
-				lines,
-			)
-		}
-
-		return err
-	}
-
-	defer s.logger.Debug("database opened")
-
-	s.db.Store(db)
-
-	return nil
+	return os.MkdirAll(s.filename, aghos.DefaultPermDir)
 }
 
 func (s *StatsCtx) flush() (cont bool, sleepFor time.Duration) {
@@ -456,48 +367,19 @@ func (s *StatsCtx) flush() (cont bool, sleepFor time.Duration) {
 	return s.flushDB(id, limit, ptr)
 }
 
-// flushDB flushes the unit to the database.  confMu and currMu are expected to
-// be locked.
+// flushDB writes the unit to its file and removes the stale unit file.  confMu
+// and currMu are expected to be locked.
 func (s *StatsCtx) flushDB(id, limit uint32, ptr *unit) (cont bool, sleepFor time.Duration) {
-	db := s.db.Load()
-	if db == nil {
-		return true, 0
-	}
-
-	isCommitable := true
-	tx, err := db.Begin(true)
-	if err != nil {
-		s.logger.Error("opening transaction", slogutil.KeyError, err)
-
-		return true, 0
-	}
-	defer func() {
-		if err = finishTxn(tx, isCommitable); err != nil {
-			s.logger.Error("finishing transaction", slogutil.KeyError, err)
-		}
-	}()
-
 	s.curr = newUnit(id)
 
-	udb := ptr.serialize()
-	flushErr := s.flushUnitToDB(udb, tx, ptr.id)
-	if flushErr != nil {
-		s.logger.Error("flushing unit", slogutil.KeyError, flushErr)
-		isCommitable = false
+	err := s.flushUnitToDB(ptr.serialize(), ptr.id)
+	if err != nil {
+		s.logger.Error("flushing unit", slogutil.KeyError, err)
 	}
 
-	delErr := tx.DeleteBucket(idToUnitName(id - limit))
-
-	if delErr != nil {
-		// TODO(e.burkov):  Improve the algorithm of deleting the oldest bucket
-		// to avoid the error.
-		lvl := slog.LevelDebug
-		if !errors.Is(delErr, bbolterrors.ErrBucketNotFound) {
-			isCommitable = false
-			lvl = slog.LevelError
-		}
-
-		s.logger.Log(context.TODO(), lvl, "deleting bucket", slogutil.KeyError, delErr)
+	err = os.Remove(s.unitPath(id - limit))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		s.logger.Error("deleting unit", slogutil.KeyError, err)
 	}
 
 	return true, 0
@@ -540,29 +422,7 @@ func (s *StatsCtx) setLimit(limit time.Duration) {
 func (s *StatsCtx) clear() (err error) {
 	defer func() { err = errors.Annotate(err, "clearing: %w") }()
 
-	db := s.db.Swap(nil)
-	if db != nil {
-		var tx *bbolt.Tx
-		tx, err = db.Begin(true)
-		if err != nil {
-			s.logger.Error("opening transaction", slogutil.KeyError, err)
-		} else if err = finishTxn(tx, false); err != nil {
-			// Don't wrap the error since it's informative enough as is.
-			return err
-		}
-
-		// Active transactions will continue using database, but new ones won't
-		// be created.
-		err = db.Close()
-		if err != nil {
-			return fmt.Errorf("closing database: %w", err)
-		}
-
-		// All active transactions are now closed.
-		s.logger.Debug("database closed")
-	}
-
-	err = os.Remove(s.filename)
+	err = os.RemoveAll(s.filename)
 	if err != nil {
 		s.logger.Error("removing", slogutil.KeyError, err)
 	}
@@ -583,26 +443,11 @@ func (s *StatsCtx) clear() (err error) {
 	return nil
 }
 
-// loadUnits returns stored units from the database and current unit ID.
+// loadUnits returns stored units from the unit files and current unit ID.
 func (s *StatsCtx) loadUnits(limit uint32) (units []*unitDB, curID uint32) {
-	db := s.db.Load()
-	if db == nil {
-		return nil, 0
-	}
-
-	// NOTE:  This mutex, when combined with the database transaction, is
-	// required to be locked first.
 	s.currMu.RLock()
 	defer s.currMu.RUnlock()
 
-	// Use writable transaction to ensure any ongoing writable transaction is
-	// taken into account.
-	tx, err := db.Begin(true)
-	if err != nil {
-		s.logger.Error("opening transaction", slogutil.KeyError, err)
-
-		return nil, 0
-	}
 	cur := s.curr
 
 	if cur != nil {
@@ -615,16 +460,11 @@ func (s *StatsCtx) loadUnits(limit uint32) (units []*unitDB, curID uint32) {
 	units = make([]*unitDB, 0, limit)
 	firstID := curID - limit + 1
 	for i := firstID; i != curID; i++ {
-		u := s.loadUnitFromDB(tx, i)
+		u := s.loadUnitFromDB(i)
 		if u == nil {
 			u = &unitDB{NResult: make([]uint64, resultLast)}
 		}
 		units = append(units, u)
-	}
-
-	err = finishTxn(tx, false)
-	if err != nil {
-		s.logger.Error("finishing transaction", slogutil.KeyError, err)
 	}
 
 	if cur != nil {

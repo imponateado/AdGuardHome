@@ -64,7 +64,8 @@ func entities(workDir, dataDir, statsDir, querylogDir, confFilePath string) (ent
 		})
 	}
 	ents = append(ents, entity{
-		Key: filepath.Join(statsDir, "stats.db"),
+		Key:   filepath.Join(statsDir, "stats"),
+		Value: true,
 	})
 
 	return ents

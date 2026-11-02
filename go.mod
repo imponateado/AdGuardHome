@@ -35,7 +35,6 @@ require (
 	github.com/quic-go/quic-go v0.63.0
 	github.com/stretchr/testify v1.12.1
 	github.com/ti-mo/netfilter v0.5.3
-	go.etcd.io/bbolt v1.5.0
 	// TODO(e.burkov): Update to a stable tag.
 	go.yaml.in/yaml/v4 v4.0.0-rc.6
 	golang.org/x/crypto v0.58.0

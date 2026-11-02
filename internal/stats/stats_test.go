@@ -57,7 +57,7 @@ func TestStats(t *testing.T) {
 	conf := stats.Config{
 		Logger:            slogutil.NewDiscardLogger(),
 		ShouldCountClient: func([]string) bool { return true },
-		Filename:          filepath.Join(t.TempDir(), "stats.db"),
+		Filename:          filepath.Join(t.TempDir(), "stats"),
 		Limit:             timeutil.Day,
 		Enabled:           true,
 		UnitID:            constUnitID,
@@ -180,7 +180,7 @@ func TestLargeNumbers(t *testing.T) {
 	conf := stats.Config{
 		Logger:            slogutil.NewDiscardLogger(),
 		ShouldCountClient: func([]string) bool { return true },
-		Filename:          filepath.Join(t.TempDir(), "stats.db"),
+		Filename:          filepath.Join(t.TempDir(), "stats"),
 		Limit:             timeutil.Day,
 		Enabled:           true,
 		UnitID:            func() (id uint32) { return atomic.LoadUint32(&curHour) },
@@ -236,7 +236,7 @@ func TestShouldCount(t *testing.T) {
 	s, err := stats.New(stats.Config{
 		Logger:   slogutil.NewDiscardLogger(),
 		Enabled:  true,
-		Filename: filepath.Join(t.TempDir(), "stats.db"),
+		Filename: filepath.Join(t.TempDir(), "stats"),
 		Limit:    timeutil.Day,
 		Ignored:  engine,
 		ShouldCountClient: func(ids []string) (a bool) {

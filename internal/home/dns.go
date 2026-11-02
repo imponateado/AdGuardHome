@@ -83,13 +83,12 @@ func initDNS(
 
 	statsConf := stats.Config{
 		Logger:            baseLogger.With(slogutil.KeyPrefix, "stats"),
-		Filename:          filepath.Join(statsDir, "stats.db"),
+		Filename:          filepath.Join(statsDir, "stats"),
 		Limit:             time.Duration(config.Stats.Interval),
 		ConfigModifier:    confModifier,
 		HTTPReg:           httpReg,
 		Enabled:           config.Stats.Enabled,
 		ShouldCountClient: globalContext.clients.shouldCountClient,
-		QueryLog:          globalContext.queryLog,
 	}
 
 	engine, err = aghnet.NewIgnoreEngine(config.Stats.Ignored, config.Stats.IgnoredEnabled)

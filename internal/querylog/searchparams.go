@@ -1,8 +1,6 @@
 package querylog
 
 import (
-	"context"
-	"log/slog"
 	"time"
 )
 
@@ -36,31 +34,6 @@ func newSearchParams() *searchParams {
 		// by default, we scan up to 50k entries at once
 		maxFileScanEntries: 50000,
 	}
-}
-
-// quickMatchClientFunc is a simplified client finder for quick matches.
-type quickMatchClientFunc = func(
-	ctx context.Context,
-	logger *slog.Logger,
-	clientID, ip string,
-) (c *Client)
-
-// quickMatch quickly checks if the line matches the given search parameters.
-// It returns false if the line doesn't match.  This method is only here for
-// optimization purposes.
-func (s *searchParams) quickMatch(
-	ctx context.Context,
-	logger *slog.Logger,
-	line string,
-	findClient quickMatchClientFunc,
-) (ok bool) {
-	for _, c := range s.searchCriteria {
-		if !c.quickMatch(ctx, logger, line, findClient) {
-			return false
-		}
-	}
-
-	return true
 }
 
 // match - checks if the logEntry matches the searchParams

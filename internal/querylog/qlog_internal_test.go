@@ -76,10 +76,7 @@ func TestQueryLog(t *testing.T) {
 	// Write to disk (first file).
 	require.NoError(t, l.flushLogBuffer(ctx))
 
-	// Start writing to the second file.
-	require.NoError(t, l.rotate(ctx))
-
-	// Add disk entries.
+	// Add disk entries for the second file.
 	addTestEntry(l, entry2.QHost, entry2.Answer, entry2.IP, filtering.Rewritten)
 	// Write to disk.
 	require.NoError(t, l.flushLogBuffer(ctx))

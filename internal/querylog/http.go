@@ -58,9 +58,6 @@ type getConfigResp struct {
 	//
 	// TODO(a.garipov): Consider using separate setting for statistics.
 	AnonymizeClientIP aghalg.NullBool `json:"anonymize_client_ip"`
-
-	// StorageType defines where to save logs: "json" or "sqlite".
-	StorageType string `json:"storage_type"`
 }
 
 // Register web handlers
@@ -146,7 +143,6 @@ func (l *queryLog) handleGetQueryLogConfig(w http.ResponseWriter, r *http.Reques
 			AnonymizeClientIP: aghalg.BoolToNullBool(l.conf.AnonymizeClientIP),
 			Ignored:           l.conf.Ignored.Values(),
 			IgnoredEnabled:    aghalg.BoolToNullBool(l.conf.Ignored.IsEnabled()),
-			StorageType:       l.conf.StorageType,
 		}
 	}()
 
@@ -330,10 +326,6 @@ func (l *queryLog) applyQueryLogConfig(
 	conf.RotationIvl = ivl
 	conf.Enabled = newConf.Enabled == aghalg.NBTrue
 	conf.AnonymizeClientIP = newConf.AnonymizeClientIP == aghalg.NBTrue
-
-	if newConf.StorageType != "" {
-		conf.StorageType = newConf.StorageType
-	}
 
 	if conf.AnonymizeClientIP {
 		l.anonymizer.Store(AnonymizeIP)

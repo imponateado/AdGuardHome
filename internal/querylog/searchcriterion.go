@@ -1,9 +1,7 @@
 package querylog
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
 
@@ -130,53 +128,6 @@ func ctDomainOrClientCaseNonStrict(
 		(asciiTerm != "" && stringutil.ContainsFold(host, asciiTerm)) ||
 		stringutil.ContainsFold(ip, term) ||
 		stringutil.ContainsFold(name, term)
-}
-
-// quickMatch quickly checks if the line matches the given search criterion.
-// It returns false if the like doesn't match.  This method is only here for
-// optimization purposes.  logger and findClient must not be nil.
-func (c *searchCriterion) quickMatch(
-	ctx context.Context,
-	logger *slog.Logger,
-	line string,
-	findClient quickMatchClientFunc,
-) (ok bool) {
-	switch c.criterionType {
-	case ctTerm:
-		host := readJSONValue(line, `"QH":"`)
-		ip := readJSONValue(line, `"IP":"`)
-		clientID := readJSONValue(line, `"CID":"`)
-
-		var name string
-		if cli := findClient(ctx, logger, clientID, ip); cli != nil {
-			name = cli.Name
-		}
-
-		if c.strict {
-			return ctDomainOrClientCaseStrict(c.value, c.asciiVal, clientID, name, host, ip)
-		}
-
-		return ctDomainOrClientCaseNonStrict(c.value, c.asciiVal, clientID, name, host, ip)
-	case ctFilteringStatus:
-		// Go on, as we currently don't do quick matches against
-		// filtering statuses.
-		return true
-	case ctReason:
-		reasonCode := readJSONNumericValue(line, `"Reason":`)
-		if reasonCode == "" {
-			// For [filtering.NotFilteredNotFound] reason can be empty.
-			return slices.Contains(c.values, filtering.NotFilteredNotFound.String())
-		}
-
-		idx := slices.Index(reasonCodes[:], reasonCode)
-		if idx == -1 {
-			return false
-		}
-
-		return slices.Contains(c.values, filtering.Reason(idx).String())
-	default:
-		return true
-	}
 }
 
 // match checks if the log entry matches this search criterion.  entry must not

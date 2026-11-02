@@ -32,9 +32,6 @@ type QueryLogConfig struct {
 	// IgnoredEnabled defines whether hosts from the ignored list should be
 	// ignored.
 	IgnoredEnabled bool `yaml:"ignored_enabled"`
-
-	// StorageType defines where to save logs: "json" or "sqlite".
-	StorageType string `yaml:"storage_type"`
 }
 
 // type check

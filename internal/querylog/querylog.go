@@ -1,11 +1,10 @@
 package querylog
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/AdguardTeam/AdGuardHome/internal/agh"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghhttp"
 	"github.com/AdguardTeam/AdGuardHome/internal/aghnet"
+	"github.com/AdguardTeam/AdGuardHome/internal/aghos"
 	"github.com/AdguardTeam/AdGuardHome/internal/configmgr"
 	"github.com/AdguardTeam/AdGuardHome/internal/filtering"
 	"github.com/AdguardTeam/golibs/container"
@@ -35,13 +35,6 @@ type QueryLog interface {
 
 	// ShouldLog returns true if request for the host should be logged.
 	ShouldLog(host string, qType, qClass uint16, ids []string) bool
-
-	// GetSQLDB returns the underlying SQLite database connection, or nil if
-	// SQLite is not used.
-	GetSQLDB() *sql.DB
-
-	// Flush forces the buffer to be written to the storage.
-	Flush(ctx context.Context) error
 }
 
 // Config is the query log configuration structure.
@@ -72,9 +65,8 @@ type Config struct {
 	// BaseDir is the base directory for log files.
 	BaseDir string
 
-	// RotationIvl is the interval for log rotation.  After that period, the old
-	// log file will be renamed, NOT deleted, so the actual log retention time
-	// is twice the interval.
+	// RotationIvl is the log retention time.  Files with older entries are
+	// deleted hourly.
 	RotationIvl time.Duration
 
 	// MemSize is the number of entries kept in a memory buffer before they are
@@ -90,9 +82,6 @@ type Config struct {
 	// AnonymizeClientIP tells if the query log should anonymize clients' IP
 	// addresses.
 	AnonymizeClientIP bool
-
-	// StorageType defines where to save logs: "json" (default) or "sqlite".
-	StorageType string
 }
 
 // AddParams is the parameters for adding an entry.
@@ -155,10 +144,6 @@ func New(conf Config) (ql QueryLog, err error) {
 
 // newQueryLog crates a new queryLog.
 func newQueryLog(conf Config) (l *queryLog, err error) {
-	if conf.StorageType == "" {
-		conf.StorageType = "json"
-	}
-
 	findClient := conf.FindClient
 	if findClient == nil {
 		findClient = func(_ []string) (_ *Client, _ error) {
@@ -179,19 +164,16 @@ func newQueryLog(conf Config) (l *queryLog, err error) {
 
 		buffer: container.NewRingBuffer[*logEntry](memSize),
 
-		conf:    &Config{},
-		confMu:  &sync.RWMutex{},
-		logFile: filepath.Join(conf.BaseDir, queryLogFileName),
+		conf:   &Config{},
+		confMu: &sync.RWMutex{},
+		logDir: filepath.Join(conf.BaseDir, queryLogDirName),
 
 		anonymizer: conf.Anonymizer,
 	}
 
-	if conf.StorageType == "sqlite" {
-		dbPath := filepath.Join(conf.BaseDir, "querylog.sqlite")
-		l.db, err = initDB(dbPath)
-		if err != nil {
-			return nil, fmt.Errorf("initializing sqlite: %w", err)
-		}
+	err = os.MkdirAll(l.logDir, aghos.DefaultPermDir)
+	if err != nil {
+		return nil, fmt.Errorf("creating log dir: %w", err)
 	}
 
 	*l.conf = conf
@@ -201,15 +183,5 @@ func newQueryLog(conf Config) (l *queryLog, err error) {
 		return nil, fmt.Errorf("unsupported interval: %w", err)
 	}
 
-	// l.CheckAndMigrate(context.Background())
-
 	return l, nil
-}
-
-func (l *queryLog) GetSQLDB() *sql.DB {
-	return l.db
-}
-
-func (l *queryLog) Flush(ctx context.Context) error {
-	return l.flushLogBuffer(ctx)
 }

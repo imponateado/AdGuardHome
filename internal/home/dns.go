@@ -72,7 +72,6 @@ func initDNS(
 		MemSize:           config.QueryLog.MemSize,
 		Enabled:           config.QueryLog.Enabled,
 		FileEnabled:       config.QueryLog.FileEnabled,
-		StorageType:       config.QueryLog.StorageType,
 	}
 
 	conf.Ignored = engine

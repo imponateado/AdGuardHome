@@ -50,11 +50,8 @@ func entities(workDir, dataDir, statsDir, querylogDir, confFilePath string) (ent
 		})
 	}
 	ents = append(ents, entity{
-		Key:   filepath.Join(querylogDir, "querylog.json"),
-		Value: false,
-	}, entity{
-		Key:   filepath.Join(querylogDir, "querylog.json.1"),
-		Value: false,
+		Key:   filepath.Join(querylogDir, "querylog"),
+		Value: true,
 	})
 
 	if dataDir != statsDir {

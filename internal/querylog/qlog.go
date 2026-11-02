@@ -3,7 +3,6 @@ package querylog
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,10 +18,6 @@ import (
 	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/miekg/dns"
 )
-
-// queryLogFileName is a name of the log file.  ".gz" extension is added later
-// during compression.
-const queryLogFileName = "querylog.json"
 
 // queryLog is a structure that writes and reads the DNS query log.
 type queryLog struct {
@@ -42,10 +37,8 @@ type queryLog struct {
 	// be modified.
 	buffer *container.RingBuffer[*logEntry]
 
-	// logFile is the path to the log file.
-	logFile string
-
-	db *sql.DB
+	// logDir is the path to the directory with the log files.
+	logDir string
 
 	// bufferLock protects buffer.
 	bufferLock sync.RWMutex
@@ -106,17 +99,8 @@ func (l *queryLog) Shutdown(ctx context.Context) (err error) {
 	defer l.confMu.RUnlock()
 
 	if l.conf.FileEnabled {
-		err = l.flushLogBuffer(ctx)
-		if err != nil {
-			// Don't wrap the error because it's informative enough as is.
-			return err
-		}
-	}
-
-	if l.db != nil {
-		if closeErr := l.db.Close(); closeErr != nil {
-			l.logger.ErrorContext(ctx, "closing sqlite", slogutil.KeyError, closeErr)
-		}
+		// Don't wrap the error because it's informative enough as is.
+		return l.flushLogBuffer(ctx)
 	}
 
 	return nil
@@ -162,7 +146,6 @@ func (l *queryLog) WriteDiskConfig(dc *configmgr.QueryLogConfig, dnsConf *config
 	dc.Enabled = c.Enabled
 	dc.FileEnabled = c.FileEnabled
 	dc.IgnoredEnabled = c.Ignored.IsEnabled()
-	dc.StorageType = c.StorageType
 
 	dnsConf.AnonymizeClientIP = c.AnonymizeClientIP
 }
@@ -180,34 +163,17 @@ func (l *queryLog) clear(ctx context.Context) {
 		l.flushPending = false
 	}()
 
-	if l.db != nil {
-		_, err := l.db.ExecContext(ctx, "DELETE FROM query_log")
-		if err != nil {
-			l.logger.ErrorContext(ctx, "clearing sqlite table", slogutil.KeyError, err)
-		}
-
-		_, err = l.db.ExecContext(ctx, "VACUUM")
-		if err != nil {
-			l.logger.ErrorContext(ctx, "vacuuming sqlite", slogutil.KeyError, err)
-		}
-
-		l.logger.DebugContext(ctx, "sqlite cleared")
+	// Remove only the log files, since the directory may be the data one.
+	files, err := l.listFiles()
+	if err != nil {
+		l.logger.ErrorContext(ctx, "listing log files", slogutil.KeyError, err)
 	}
 
-	oldLogFile := l.logFile + ".1"
-	err := os.Remove(oldLogFile)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		l.logger.ErrorContext(
-			ctx,
-			"removing old log file",
-			"file", oldLogFile,
-			slogutil.KeyError, err,
-		)
-	}
-
-	err = os.Remove(l.logFile)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		l.logger.ErrorContext(ctx, "removing log file", "file", l.logFile, slogutil.KeyError, err)
+	for _, f := range files {
+		err = os.Remove(f.path)
+		if err != nil {
+			l.logger.ErrorContext(ctx, "removing log file", "file", f.path, slogutil.KeyError, err)
+		}
 	}
 
 	l.logger.DebugContext(ctx, "cleared")

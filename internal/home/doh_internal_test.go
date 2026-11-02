@@ -24,7 +24,7 @@ func TestWebAPI_wrapMux(t *testing.T) {
 		PasswordHash: string(passwordHash),
 	}}
 
-	sessionsDB := filepath.Join(t.TempDir(), "sessions.db")
+	sessionsDB := filepath.Join(t.TempDir(), "sessions.json")
 
 	initCtx := testutil.ContextWithTimeout(t, testTimeout)
 

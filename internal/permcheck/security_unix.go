@@ -36,7 +36,7 @@ func entities(workDir, dataDir, statsDir, querylogDir, confFilePath string) (ent
 		Key:   filepath.Join(dataDir, "filters"),
 		Value: true,
 	}, {
-		Key:   filepath.Join(dataDir, "sessions.db"),
+		Key:   filepath.Join(dataDir, "sessions.json"),
 		Value: false,
 	}, {
 		Key:   filepath.Join(dataDir, "leases.json"),

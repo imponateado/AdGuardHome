@@ -20,7 +20,7 @@ func TestAuth_UsersList(t *testing.T) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(userPassword), bcrypt.DefaultCost)
 	require.NoError(t, err)
 
-	sessionsDB := filepath.Join(t.TempDir(), "sessions.db")
+	sessionsDB := filepath.Join(t.TempDir(), "sessions.json")
 
 	user := webUser{
 		Name:         userName,

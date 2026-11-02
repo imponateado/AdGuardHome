@@ -17,7 +17,7 @@ import (
 )
 
 // sessionsDBName is the name of the file where session data is stored.
-const sessionsDBName = "sessions.db"
+const sessionsDBName = "sessions.json"
 
 // webUser represents a user of the Web UI.
 //

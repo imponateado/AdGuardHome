@@ -3,6 +3,8 @@ package aghuser_test
 import (
 	"context"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/testutil"
 	"github.com/AdguardTeam/golibs/testutil/faketime"
+	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +71,7 @@ func TestDefaultSessionStorage(t *testing.T) {
 		},
 	}
 
-	dbFile, err := os.CreateTemp(t.TempDir(), "sessions.db")
+	dbFile, err := os.CreateTemp(t.TempDir(), "sessions.json")
 	require.NoError(t, err)
 	testutil.CleanupAndRequireSuccess(t, dbFile.Close)
 
@@ -159,4 +162,48 @@ func TestDefaultSessionStorage(t *testing.T) {
 
 		assert.Nil(t, got)
 	}))
+}
+
+func TestDefaultSessionStorage_file(t *testing.T) {
+	const login aghuser.Login = "user"
+
+	ctx := testutil.ContextWithTimeout(t, testTimeout)
+	path := filepath.Join(t.TempDir(), "sessions.json")
+
+	// A malformed file must not prevent the start, users just log in again.
+	err := os.WriteFile(path, []byte("{not json"), 0o600)
+	require.NoError(t, err)
+
+	userDB := aghuser.NewDefaultDB()
+	err = userDB.Create(ctx, &aghuser.User{Login: login, ID: aghuser.NewUserID()})
+	require.NoError(t, err)
+
+	conf := &aghuser.DefaultSessionStorageConfig{
+		Clock:      timeutil.SystemClock{},
+		UserDB:     userDB,
+		Logger:     slogutil.NewDiscardLogger(),
+		DBPath:     path,
+		SessionTTL: time.Hour,
+	}
+
+	ds, err := aghuser.NewDefaultSessionStorage(ctx, conf)
+	require.NoError(t, err)
+
+	s := addSession(t, ctx, ds, login)
+
+	if runtime.GOOS != "windows" {
+		fi, statErr := os.Stat(path)
+		require.NoError(t, statErr)
+
+		assert.Equal(t, os.FileMode(0o600), fi.Mode().Perm())
+	}
+
+	ds, err = aghuser.NewDefaultSessionStorage(ctx, conf)
+	require.NoError(t, err)
+
+	got, err := ds.FindByToken(ctx, s.Token)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+
+	assert.Equal(t, login, got.UserLogin)
 }

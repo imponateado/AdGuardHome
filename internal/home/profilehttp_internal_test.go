@@ -39,7 +39,7 @@ func TestWeb_HandleGetProfile(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	sessionsDB := filepath.Join(tempDir, "sessions.db")
+	sessionsDB := filepath.Join(tempDir, "sessions.json")
 
 	user := &webUser{
 		Name:         userName,

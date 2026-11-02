@@ -506,7 +506,7 @@ func TestAuth_ServeHTTP_auth(t *testing.T) {
 
 	tempDir := t.TempDir()
 	writeGLFile(t, tempDir, testTTL)
-	sessionsDB := filepath.Join(tempDir, "sessions.db")
+	sessionsDB := filepath.Join(tempDir, "sessions.json")
 
 	gliNetRoot, err := os.OpenRoot(tempDir)
 	require.NoError(t, err)
@@ -673,7 +673,7 @@ func TestAuth_ServeHTTP_logout(t *testing.T) {
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(userPassword), bcrypt.DefaultCost)
 	require.NoError(t, err)
 
-	sessionsDB := filepath.Join(t.TempDir(), "sessions.db")
+	sessionsDB := filepath.Join(t.TempDir(), "sessions.json")
 
 	users := []webUser{{
 		Name:         userName,

@@ -114,6 +114,8 @@ linux    arm       5   -
 linux    arm       6   -
 linux    arm       7   -
 linux    arm64     -   -
+linux    mips64le  -   softfloat
+linux    mipsle    -   softfloat
 linux    ppc64le   -   -
 linux    riscv64   -   -
 windows  386       -   -

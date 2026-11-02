@@ -103,8 +103,6 @@ linux    arm       5   -
 linux    arm       6   -
 linux    arm       7   -
 linux    arm64     -   -
-linux    mips      -   softfloat
-linux    mips64    -   softfloat
 linux    mips64le  -   softfloat
 linux    mipsle    -   softfloat
 linux    ppc64le   -   -
@@ -255,7 +253,6 @@ echo "{
 #
 # TODO(a.garipov): Remove this around fall 2023.
 echo "
-  \"download_linux_mips64\": \"${version_download_url}/AdGuardHome_linux_mips64_softfloat.tar.gz\",
   \"download_linux_mips64le\": \"${version_download_url}/AdGuardHome_linux_mips64le_softfloat.tar.gz\",
   \"download_linux_mipsle\": \"${version_download_url}/AdGuardHome_linux_mipsle_softfloat.tar.gz\",
 " >>"$version_json"

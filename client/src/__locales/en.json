@@ -758,10 +758,5 @@
   "version_request_error": "Update check failed. Please check your Internet connection.",
   "wednesday": "Wednesday",
   "wednesday_short": "Wed",
-  "whois": "WHOIS",
-  "storage_type_config_title": "Storage engine",
-  "storage_type_option_json": "JSON file (default)",
-  "storage_type_option_sqlite": "SQLite database (performance optimized)",
-  "storage_type_note": "Note: Changing this setting may require a restart for the changes to take effect.",
-  "on_stats_config_storage_type_info": "When SQLite is selected, this setting defines the analysis period for statistics calculation. Shorter periods significantly improve dashboard performance."
+  "whois": "WHOIS"
 }

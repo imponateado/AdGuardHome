@@ -48,7 +48,6 @@ interface SettingsProps {
         interval?: number;
         customInterval?: number;
         anonymize_client_ip?: boolean;
-        storage_type?: string;
         processingSetConfig?: boolean;
         processingClear?: boolean;
         processingGetConfig?: boolean;
@@ -180,7 +179,6 @@ class Settings extends Component<SettingsProps> {
                                     interval={queryLogs.interval}
                                     customInterval={queryLogs.customInterval}
                                     anonymize_client_ip={queryLogs.anonymize_client_ip}
-                                    storage_type={queryLogs.storage_type}
                                     processing={queryLogs.processingSetConfig}
                                     processingClear={queryLogs.processingClear}
                                     setLogsConfig={setLogsConfig}
@@ -199,7 +197,6 @@ class Settings extends Component<SettingsProps> {
                                     processingReset={stats.processingReset}
                                     setStatsConfig={setStatsConfig}
                                     resetStats={resetStats}
-                                    storageType={queryLogs.storage_type}
                                 />
                             </div>
                         </div>

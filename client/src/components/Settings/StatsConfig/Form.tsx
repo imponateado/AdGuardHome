@@ -44,10 +44,9 @@ type Props = {
     processingReset: boolean;
     onSubmit: (values: FormValues) => void;
     onReset: () => void;
-    storageType?: string;
 };
 
-export const Form = ({ initialValues, processing, processingReset, onSubmit, onReset, storageType }: Props) => {
+export const Form = ({ initialValues, processing, processingReset, onSubmit, onReset }: Props) => {
     const { t } = useTranslation();
 
     const {
@@ -101,13 +100,7 @@ export const Form = ({ initialValues, processing, processingReset, onSubmit, onR
             </div>
 
             <div className="form__desc form__desc--top">
-                {storageType === 'sqlite' ? (
-                    <span className="text-warning">
-                        <Trans>on_stats_config_storage_type_info</Trans>
-                    </span>
-                ) : (
-                    <Trans>statistics_retention_desc</Trans>
-                )}
+                <Trans>statistics_retention_desc</Trans>
             </div>
 
             <div className="form__group form__group--settings mt-2">

@@ -6,6 +6,7 @@ import { CleanWebpackPlugin } from 'clean-webpack-plugin';
 import CopyPlugin from 'copy-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import { BUILD_ENVS } from './constants.js';
+import { THEME_BOOTSTRAP_TEMPLATE_PARAMETERS } from './scripts/theme-bootstrap-template.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -141,11 +142,13 @@ const config = {
             verbose: false,
             dry: false,
         }),
+        // Every entry point inlines the same pre-paint theme script.
         new HtmlWebpackPlugin({
             inject: true,
             cache: false,
             chunks: ['main'],
             template: HTML_PATH,
+            templateParameters: THEME_BOOTSTRAP_TEMPLATE_PARAMETERS,
         }),
         new HtmlWebpackPlugin({
             inject: true,
@@ -153,6 +156,7 @@ const config = {
             chunks: ['install'],
             filename: 'install.html',
             template: HTML_INSTALL_PATH,
+            templateParameters: THEME_BOOTSTRAP_TEMPLATE_PARAMETERS,
         }),
         new HtmlWebpackPlugin({
             inject: true,
@@ -160,6 +164,7 @@ const config = {
             chunks: ['login'],
             filename: 'login.html',
             template: HTML_LOGIN_PATH,
+            templateParameters: THEME_BOOTSTRAP_TEMPLATE_PARAMETERS,
         }),
         new HtmlWebpackPlugin({
             inject: true,
@@ -167,6 +172,7 @@ const config = {
             chunks: ['forgot_password'],
             filename: 'forgot_password.html',
             template: HTML_FORGOT_PASSWORD_PATH,
+            templateParameters: THEME_BOOTSTRAP_TEMPLATE_PARAMETERS,
         }),
         new MiniCssExtractPlugin({
             filename: isDev ? '[name].css' : '[name].[hash].css',

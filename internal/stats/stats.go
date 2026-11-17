@@ -21,16 +21,9 @@ import (
 	"github.com/AdguardTeam/AdGuardHome/internal/aghos"
 	"github.com/AdguardTeam/AdGuardHome/internal/configmgr"
 	"github.com/AdguardTeam/golibs/errors"
-	"github.com/AdguardTeam/golibs/logutil/slogutil"
 	"github.com/AdguardTeam/golibs/timeutil"
 	"github.com/google/renameio/v2/maybe"
 )
-
-// checkInterval returns true if days is valid to be used as statistics
-// retention interval.  The valid values are 0, 1, 7, 30 and 90.
-func checkInterval(days uint32) (ok bool) {
-	return days == 0 || days == 1 || days == 7 || days == 30 || days == 90
-}
 
 // validateIvl returns an error if ivl is less than an hour or more than a
 // year.
@@ -292,26 +285,6 @@ func (s *StatsCtx) TopClientsIP(maxCount uint) (ips []netip.Addr) {
 	}
 
 	return ips
-}
-
-// setLimit sets the limit.  s.lock is expected to be locked.
-//
-// TODO(s.chzhen):  Remove it when migration to the new API is over.
-func (s *StatsCtx) setLimit(limit time.Duration) {
-	if limit != 0 {
-		s.enabled = true
-		s.limit = limit
-		s.logger.Debug("setting limit in days", "num", limit/timeutil.Day)
-
-		return
-	}
-
-	s.enabled = false
-	s.logger.Debug("disabled")
-
-	if err := s.clear(); err != nil {
-		s.logger.Error("clearing", slogutil.KeyError, err)
-	}
 }
 
 // clear makes the statistics ignore the queries logged so far.  The query log

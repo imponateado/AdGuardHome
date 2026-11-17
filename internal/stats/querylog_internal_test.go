@@ -9,8 +9,8 @@ import (
 // TestQueryLog is a [QueryLogReader] for tests, which keeps the entries in
 // memory.
 type TestQueryLog struct {
-	mu      sync.Mutex
 	entries []testLogEntry
+	mu      sync.Mutex
 }
 
 // testLogEntry is an entry of [TestQueryLog].

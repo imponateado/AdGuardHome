@@ -74,13 +74,13 @@ type Config struct {
 	// and matches them.
 	Ignored *aghnet.IgnoreEngine
 
-	// Filename is the file storing the time of the last statistics reset, since
-	// the statistics are computed from the query log, which a reset keeps.
-	Filename string
-
 	// QueryLog is the query log to compute the statistics from.  If nil, the
 	// statistics are empty.
 	QueryLog QueryLogReader
+
+	// Filename is the file storing the time of the last statistics reset, since
+	// the statistics are computed from the query log, which a reset keeps.
+	Filename string
 
 	// Limit is an upper limit for collecting statistics.
 	Limit time.Duration
@@ -120,10 +120,6 @@ type StatsCtx struct {
 	// queryLog is the source of the statistics, if any.
 	queryLog QueryLogReader
 
-	// resetTime is the Unix time in nanoseconds of the last reset.  Older
-	// queries aren't counted.
-	resetTime atomic.Int64
-
 	// unitIDGen is the function that generates an identifier for the current
 	// unit.  It's here for only testing purposes.
 	unitIDGen UnitIDGenFunc
@@ -146,6 +142,10 @@ type StatsCtx struct {
 
 	// filename is the file storing resetTime.
 	filename string
+
+	// resetTime is the Unix time in nanoseconds of the last reset.  Older
+	// queries aren't counted.
+	resetTime atomic.Int64
 
 	// limit is an upper limit for collecting statistics.
 	limit time.Duration
@@ -325,27 +325,7 @@ func (s *StatsCtx) loadUnits(limit uint32) (units []*unitDB, curID uint32) {
 			since = reset
 		}
 
-		// Cache the client settings, since there are few clients and many
-		// queries.
-		counted := map[string]bool{}
-		s.queryLog.RangeEntries(context.TODO(), since, func(t time.Time, ids []string, e *Entry) {
-			// Unit IDs may wrap around in tests, so compare the offset.
-			off := uint32(t.Unix()/secsInHour) - firstID
-			if off >= limit || ignored.Has(e.Domain) {
-				return
-			}
-
-			key := strings.Join(ids, " ")
-			ok, found := counted[key]
-			if !found {
-				ok = shouldCount(ids)
-				counted[key] = ok
-			}
-
-			if ok {
-				hours[off].add(e)
-			}
-		})
+		s.queryLog.RangeEntries(context.TODO(), since, newUnitAdder(hours, firstID, ignored, shouldCount))
 	}
 
 	units = make([]*unitDB, limit)
@@ -354,6 +334,38 @@ func (s *StatsCtx) loadUnits(limit uint32) (units []*unitDB, curID uint32) {
 	}
 
 	return units, curID
+}
+
+// newUnitAdder returns a function that adds the query log entries that are
+// counted to the hourly unit of hours they belong to.  The first of hours has
+// the ID firstID.
+func newUnitAdder(
+	hours []*unit,
+	firstID uint32,
+	ignored *aghnet.IgnoreEngine,
+	shouldCount func(ids []string) (ok bool),
+) (add func(t time.Time, ids []string, e *Entry)) {
+	// Cache the client settings, since there are few clients and many queries.
+	counted := map[string]bool{}
+
+	return func(t time.Time, ids []string, e *Entry) {
+		// Unit IDs may wrap around in tests, so compare the offset.
+		off := uint32(t.Unix()/secsInHour) - firstID
+		if off >= uint32(len(hours)) || ignored.Has(e.Domain) {
+			return
+		}
+
+		key := strings.Join(ids, " ")
+		ok, found := counted[key]
+		if !found {
+			ok = shouldCount(ids)
+			counted[key] = ok
+		}
+
+		if ok {
+			hours[off].add(e)
+		}
+	}
 }
 
 // ShouldCount returns true if request for the host should be counted.

@@ -18,12 +18,12 @@ import (
 // statsRow is the part of a [parquetRow] that statistics need, so that the
 // other columns aren't decoded.
 type statsRow struct {
-	Time     int64  `parquet:"t"`
 	QHost    string `parquet:"qh"`
 	ClientID string `parquet:"cid"`
 	IP       string `parquet:"ip"`
 	Upstream string `parquet:"up"`
 	Result   []byte `parquet:"res"`
+	Time     int64  `parquet:"t"`
 	Elapsed  int64  `parquet:"el"`
 	Cached   bool   `parquet:"cached"`
 }
@@ -54,25 +54,40 @@ func (l *queryLog) RangeEntries(
 		batch := files[:min(batchLen, len(files))]
 		files = files[len(batch):]
 
-		decoded := make([][]statsRow, len(batch))
-		wg := &sync.WaitGroup{}
-		for i, file := range batch {
-			wg.Go(func() {
-				var err error
-				decoded[i], err = parquet.ReadFile[statsRow](file.path)
-				if err != nil {
-					l.logger.ErrorContext(ctx, "reading log file", "file", file.path, slogutil.KeyError, err)
-				}
-			})
-		}
-
-		wg.Wait()
-
-		for _, rows := range decoded {
+		for _, rows := range l.decodeStatsFiles(ctx, batch) {
 			rangeStatsRows(rows, sinceNano, f)
 		}
 	}
 
+	rangeBuffered(buffered, since, f)
+}
+
+// decodeStatsFiles decodes the statistics rows of files in parallel.  Files
+// that can't be read have no rows.
+func (l *queryLog) decodeStatsFiles(ctx context.Context, files []logFile) (decoded [][]statsRow) {
+	decoded = make([][]statsRow, len(files))
+	wg := &sync.WaitGroup{}
+	for i, file := range files {
+		wg.Go(func() {
+			var err error
+			decoded[i], err = parquet.ReadFile[statsRow](file.path)
+			if err != nil {
+				l.logger.ErrorContext(ctx, "reading log file", "file", file.path, slogutil.KeyError, err)
+			}
+		})
+	}
+
+	wg.Wait()
+
+	return decoded
+}
+
+// rangeBuffered calls f for each of the buffered entries not older than since.
+func rangeBuffered(
+	buffered []*logEntry,
+	since time.Time,
+	f func(t time.Time, ids []string, e *stats.Entry),
+) {
 	for _, le := range buffered {
 		if le.Time.Before(since) {
 			continue

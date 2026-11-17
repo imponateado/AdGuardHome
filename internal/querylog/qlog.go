@@ -45,7 +45,6 @@ type queryLog struct {
 
 	// fileFlushLock synchronizes a file-flushing goroutine and main thread.
 	fileFlushLock sync.Mutex
-	fileWriteLock sync.Mutex
 
 	flushPending bool
 }

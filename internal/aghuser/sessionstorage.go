@@ -141,30 +141,10 @@ func (ds *DefaultSessionStorage) loadSessions(ctx context.Context) (err error) {
 
 	now := ds.clock.Now()
 	for k, v := range stored {
-		var t SessionToken
-		if n, decErr := hex.Decode(t[:], []byte(k)); decErr != nil || n != SessionTokenLength {
-			continue
+		s := ds.restoreSession(ctx, now, k, v)
+		if s != nil {
+			ds.sessions[s.Token] = s
 		}
-
-		s := &Session{Token: t, UserLogin: v.Login, Expire: time.Unix(v.Expire, 0)}
-		if now.After(s.Expire) {
-			continue
-		}
-
-		u, uErr := ds.userDB.ByLogin(ctx, s.UserLogin)
-		if uErr != nil {
-			// Should not happen, as it currently always returns nil for error.
-			panic(uErr)
-		}
-
-		if u == nil {
-			ds.logger.DebugContext(ctx, "no saved user by name", "name", s.UserLogin)
-
-			continue
-		}
-
-		s.UserID = u.ID
-		ds.sessions[t] = s
 	}
 
 	removed := len(stored) - len(ds.sessions)
@@ -175,6 +155,42 @@ func (ds *DefaultSessionStorage) loadSessions(ctx context.Context) (err error) {
 	}
 
 	return ds.save()
+}
+
+// restoreSession returns the session stored under the hex-encoded token k, or
+// nil if the token is malformed, the session has expired, or its user no longer
+// exists.
+func (ds *DefaultSessionStorage) restoreSession(
+	ctx context.Context,
+	now time.Time,
+	k string,
+	v storedSession,
+) (s *Session) {
+	var t SessionToken
+	if n, err := hex.Decode(t[:], []byte(k)); err != nil || n != SessionTokenLength {
+		return nil
+	}
+
+	s = &Session{Token: t, UserLogin: v.Login, Expire: time.Unix(v.Expire, 0)}
+	if now.After(s.Expire) {
+		return nil
+	}
+
+	u, err := ds.userDB.ByLogin(ctx, s.UserLogin)
+	if err != nil {
+		// Should not happen, as it currently always returns nil for error.
+		panic(err)
+	}
+
+	if u == nil {
+		ds.logger.DebugContext(ctx, "no saved user by name", "name", s.UserLogin)
+
+		return nil
+	}
+
+	s.UserID = u.ID
+
+	return s
 }
 
 // save atomically writes all sessions to the file.  ds.mu is expected to be

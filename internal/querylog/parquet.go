@@ -34,7 +34,6 @@ const parquetExt = ".parquet"
 
 // parquetRow is a [logEntry] as stored in a Parquet file.
 type parquetRow struct {
-	Time        int64  `parquet:"t,delta"`
 	QHost       string `parquet:"qh,dict"`
 	QType       string `parquet:"qt,dict"`
 	QClass      string `parquet:"qc,dict"`
@@ -51,6 +50,7 @@ type parquetRow struct {
 	// the zero result.
 	Result []byte `parquet:"res"`
 
+	Time              int64 `parquet:"t,delta"`
 	Elapsed           int64 `parquet:"el"`
 	Cached            bool  `parquet:"cached"`
 	AuthenticatedData bool  `parquet:"ad"`
@@ -251,50 +251,94 @@ func (l *queryLog) searchFiles(
 		return nil, time.Time{}, 0
 	}
 
-	olderThan := int64(0)
+	s := &fileSearch{
+		params:     params,
+		cache:      cache,
+		totalLimit: params.offset + params.limit,
+	}
 	if !params.olderThan.IsZero() {
-		olderThan = params.olderThan.UnixNano()
+		s.olderThan = params.olderThan.UnixNano()
 	}
 
-	totalLimit := params.offset + params.limit
-	maxScan := params.maxFileScanEntries
 	for i, f := range files {
 		// Entries of a file are newer than the newest entry of the next one,
 		// so skip the file if even those are too new.
-		if olderThan != 0 && i+1 < len(files) && files[i+1].newest >= olderThan {
+		if s.olderThan != 0 && i+1 < len(files) && files[i+1].newest >= s.olderThan {
 			continue
 		}
 
-		var rows []parquetRow
-		rows, err = parquet.ReadFile[parquetRow](f.path)
-		if err != nil {
-			l.logger.ErrorContext(ctx, "reading log file", "file", f.path, slogutil.KeyError, err)
-
-			continue
-		}
-
-		for j := len(rows) - 1; j >= 0; j-- {
-			r := &rows[j]
-			if olderThan != 0 && r.Time >= olderThan {
-				continue
-			}
-
-			total++
-			oldest = time.Unix(0, r.Time)
-
-			e := l.matchRow(ctx, r, params, cache)
-			if e != nil {
-				entries = append(entries, e)
-			}
-
-			if len(entries) == totalLimit || (maxScan > 0 && total >= maxScan) {
-				return entries, oldest, total
-			}
+		if l.searchFile(ctx, f.path, s) {
+			return s.entries, s.oldest, s.total
 		}
 	}
 
 	// All the files are read, so there is nothing older.
-	return entries, time.Time{}, total
+	return s.entries, time.Time{}, s.total
+}
+
+// fileSearch is the state of a single search across the log files.
+type fileSearch struct {
+	// params are the search parameters.  It must not be nil.
+	params *searchParams
+
+	// cache is the optional client cache.
+	cache clientCache
+
+	// oldest is the time of the oldest processed entry.
+	oldest time.Time
+
+	// entries are the matched entries found so far.
+	entries []*logEntry
+
+	// olderThan is the Unix time in nanoseconds which the processed entries
+	// must be older than.  Zero means no limit.
+	olderThan int64
+
+	// total is the number of processed entries, including discarded ones.
+	total int
+
+	// totalLimit is the number of matched entries after which the search
+	// stops.
+	totalLimit int
+}
+
+// done returns true if the search has found or scanned enough entries.
+func (s *fileSearch) done() (ok bool) {
+	maxScan := s.params.maxFileScanEntries
+
+	return len(s.entries) == s.totalLimit || (maxScan > 0 && s.total >= maxScan)
+}
+
+// searchFile looks up log records from the log file at path, newest first, and
+// adds them to s.  It returns true if the search is done.  s must not be nil.
+func (l *queryLog) searchFile(ctx context.Context, path string, s *fileSearch) (done bool) {
+	rows, err := parquet.ReadFile[parquetRow](path)
+	if err != nil {
+		l.logger.ErrorContext(ctx, "reading log file", "file", path, slogutil.KeyError, err)
+
+		return false
+	}
+
+	for i := len(rows) - 1; i >= 0; i-- {
+		r := &rows[i]
+		if s.olderThan != 0 && r.Time >= s.olderThan {
+			continue
+		}
+
+		s.total++
+		s.oldest = time.Unix(0, r.Time)
+
+		e := l.matchRow(ctx, r, s.params, s.cache)
+		if e != nil {
+			s.entries = append(s.entries, e)
+		}
+
+		if s.done() {
+			return true
+		}
+	}
+
+	return false
 }
 
 // matchRow returns the entry of r if it matches params, or nil otherwise.  It

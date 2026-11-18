@@ -22,20 +22,20 @@ const launchdConfig = `<?xml version='1.0' encoding='UTF-8'?>
 "http://www.apple.com/DTDs/PropertyList-1.0.dtd" >
 <plist version='1.0'>
 <dict>
-<key>Label</key><string>{{html .Name}}</string>
+<key>Label</key><string>{{Name | html}}</string>
 <key>ProgramArguments</key>
 <array>
-        <string>{{html .Path}}</string>
-{{range .Config.Arguments}}
-        <string>{{html .}}</string>
+        <string>{{Path | html}}</string>
+{{range Arguments}}
+        <string>{{. | html}}</string>
 {{end}}
 </array>
-{{if .UserName}}<key>UserName</key><string>{{html .UserName}}</string>{{end}}
-{{if .ChRoot}}<key>RootDirectory</key><string>{{html .ChRoot}}</string>{{end}}
-{{if .WorkingDirectory}}<key>WorkingDirectory</key><string>{{html .WorkingDirectory}}</string>{{end}}
-<key>SessionCreate</key><{{bool .SessionCreate}}/>
-<key>KeepAlive</key><{{bool .KeepAlive}}/>
-<key>RunAtLoad</key><{{bool .RunAtLoad}}/>
+{{if UserName}}<key>UserName</key><string>{{UserName | html}}</string>{{end}}
+{{if ChRoot}}<key>RootDirectory</key><string>{{ChRoot | html}}</string>{{end}}
+{{if WorkingDirectory}}<key>WorkingDirectory</key><string>{{WorkingDirectory | html}}</string>{{end}}
+<key>SessionCreate</key><{{SessionCreate}}/>
+<key>KeepAlive</key><{{KeepAlive}}/>
+<key>RunAtLoad</key><{{RunAtLoad}}/>
 <key>Disabled</key><false/>
 <key>StandardOutPath</key>
 <string>` + launchdStdoutPath + `</string>

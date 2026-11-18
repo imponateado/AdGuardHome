@@ -38,29 +38,29 @@ func configureOSOptions(conf *service.Config) {
 //     output to the systemd journal, see
 //     https://man7.org/linux/man-pages/man5/systemd.exec.5.html#LOGGING_AND_STANDARD_INPUT/OUTPUT.
 const systemdScript = `[Unit]
-Description={{.Description}}
-ConditionFileIsExecutable={{.Path|cmdEscape}}
-{{range $i, $dep := .Dependencies}}
-{{$dep}} {{end}}
+Description={{Description}}
+ConditionFileIsExecutable={{Path | cmdEscape}}
+{{range Dependencies}}
+{{.}} {{end}}
 
 [Service]
 StartLimitInterval=5
 StartLimitBurst=10
-ExecStart={{.Path|cmdEscape}}{{range .Arguments}} {{.|cmd}}{{end}}
-{{if .ChRoot}}RootDirectory={{.ChRoot|cmd}}{{end}}
-{{if .WorkingDirectory}}WorkingDirectory={{.WorkingDirectory|cmdEscape}}{{end}}
-{{if .UserName}}User={{.UserName}}{{end}}
-{{if .ReloadSignal}}ExecReload=/bin/kill -{{.ReloadSignal}} "$MAINPID"{{end}}
-{{if .PIDFile}}PIDFile={{.PIDFile|cmd}}{{end}}
-{{if and .LogOutput .HasOutputFileSupport -}}
+ExecStart={{Path | cmdEscape}}{{range Arguments}} {{. | cmd}}{{end}}
+{{if ChRoot}}RootDirectory={{ChRoot | cmd}}{{end}}
+{{if WorkingDirectory}}WorkingDirectory={{WorkingDirectory | cmdEscape}}{{end}}
+{{if UserName}}User={{UserName}}{{end}}
+{{if ReloadSignal}}ExecReload=/bin/kill -{{ReloadSignal}} "$MAINPID"{{end}}
+{{if PIDFile}}PIDFile={{PIDFile | cmd}}{{end}}
+{{if OutputFileSupport -}}
 StandardOutput=journal
 StandardError=journal
 {{- end}}
-{{if gt .LimitNOFILE -1 }}LimitNOFILE={{.LimitNOFILE}}{{end}}
-{{if .Restart}}Restart={{.Restart}}{{end}}
-{{if .SuccessExitStatus}}SuccessExitStatus={{.SuccessExitStatus}}{{end}}
+{{if LimitNOFILE}}LimitNOFILE={{LimitNOFILE}}{{end}}
+{{if Restart}}Restart={{Restart}}{{end}}
+{{if SuccessExitStatus}}SuccessExitStatus={{SuccessExitStatus}}{{end}}
 RestartSec=10
-EnvironmentFile=-/etc/sysconfig/{{.Name}}
+EnvironmentFile=-/etc/sysconfig/{{Name}}
 
 [Install]
 WantedBy=multi-user.target
@@ -74,20 +74,20 @@ WantedBy=multi-user.target
 const sysvScript = `#!/bin/sh
 # For RedHat and cousins:
 # chkconfig: - 99 01
-# description: {{.Description}}
-# processname: {{.Path}}
+# description: {{Description}}
+# processname: {{Path}}
 
 ### BEGIN INIT INFO
-# Provides:          {{.Path}}
+# Provides:          {{Path}}
 # Required-Start:
 # Required-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: {{.DisplayName}}
-# Description:       {{.Description}}
+# Short-Description: {{DisplayName}}
+# Description:       {{Description}}
 ### END INIT INFO
 
-cmd="{{.Path}}{{range .Arguments}} {{.|cmd}}{{end}}"
+cmd="{{Path}}{{range Arguments}} {{. | cmd}}{{end}}"
 
 name=$(basename $(readlink -f $0))
 pid_file="/var/run/$name.pid"
@@ -110,7 +110,7 @@ case "$1" in
             echo "Already started"
         else
             echo "Starting $name"
-            {{if .WorkingDirectory}}cd '{{.WorkingDirectory}}'{{end}}
+            {{if WorkingDirectory}}cd '{{WorkingDirectory}}'{{end}}
             $cmd >> "$stdout_log" 2>> "$stderr_log" &
             echo $! > "$pid_file"
             if ! is_running; then
@@ -178,8 +178,8 @@ USE_PROCD=1
 START=95
 STOP=01
 
-cmd="{{.Path}}{{range .Arguments}} {{.|cmd}}{{end}}"
-name="{{.Name}}"
+cmd="{{Path}}{{range Arguments}} {{. | cmd}}{{end}}"
+name="{{Name}}"
 pid_file="/var/run/${name}.pid"
 
 start_service() {

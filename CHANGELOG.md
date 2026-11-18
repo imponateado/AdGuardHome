@@ -45,6 +45,8 @@ NOTE: Add new changes BELOW THIS COMMENT.
 
 ### Fixed
 
+- Service installation failing with `unknown template key ".Description"` on Linux, macOS, and FreeBSD.
+
 - DNS rewrites with trailing dots not matching ([#8674]).
 
 - Shutdown deadlock when looking up clients for query accounting ([#8658]).
